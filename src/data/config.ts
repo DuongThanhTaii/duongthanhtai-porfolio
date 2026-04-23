@@ -24,21 +24,21 @@ const config = {
   lastName: "Thành Tài",
   role: "Full Stack Web Developer",
   email: "duongthanhtai1308@gmail.com",
-  site: "https://nareshkhatri.site",
+  site: "https://taidt.id.vn",
 
   // for github stars button
-  githubUsername: "naresh-khatri",
-  githubRepo: "3d-portfolio",
+  githubUsername: "DuongThanhTaii",
+  githubRepo: "duongthanhtai-portfolio",
 
   get ogImg() {
     return this.site + "/assets/seo/og-image.png";
   },
   social: {
-    twitter: "https://x.com/nothotchaddi",
-    linkedin: "https://www.linkedin.com/in/naresh-khatri/",
-    instagram: "https://www.instagram.com/hotchaddi",
-    facebook: "https://www.facebook.com/HotChaddi/",
-    github: "https://github.com/Naresh-Khatri",
+    twitter: "",
+    linkedin: "https://www.linkedin.com/in/duongthanhtai-hcmue/",
+    instagram: "",
+    facebook: "",
+    github: "https://github.com/DuongThanhTaii",
   },
 };
 export { config };

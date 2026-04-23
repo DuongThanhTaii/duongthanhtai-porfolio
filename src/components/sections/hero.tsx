@@ -2,7 +2,7 @@ import { cn } from "@/lib/utils";
 import Link from "next/link";
 import React from "react";
 import { Button } from "../ui/button";
-import { File, Github, Linkedin } from "lucide-react";
+import { File } from "lucide-react";
 import {
   Tooltip,
   TooltipContent,
@@ -18,6 +18,8 @@ import SectionWrapper from "../ui/section-wrapper";
 
 const HeroSection = () => {
   const { isLoading } = usePreloader();
+  const [firstName, ...restNameParts] = config.author.split(" ");
+  const lastName = restNameParts.join(" ");
 
   return (
     <SectionWrapper id="hero" className={cn("relative w-full h-screen")}>
@@ -27,7 +29,7 @@ const HeroSection = () => {
             "h-[calc(100dvh-3rem)] md:h-[calc(100dvh-4rem)] z-[2]",
             "col-span-1",
             "flex flex-col justify-start md:justify-center items-center md:items-start",
-            "pt-28 sm:pb-16 md:p-20 lg:p-24 xl:p-28"
+            "pt-24 sm:pb-10 md:p-16 lg:p-20 xl:p-24",
           )}
         >
           {!isLoading && (
@@ -37,7 +39,7 @@ const HeroSection = () => {
                   <p
                     className={cn(
                       "md:self-start mt-4 font-thin text-md text-slate-500 dark:text-zinc-400",
-                      "cursor-default font-display sm:text-xl md:text-xl whitespace-nowrap bg-clip-text "
+                      "cursor-default font-display sm:text-xl md:text-xl whitespace-nowrap bg-clip-text ",
                     )}
                   >
                     Hi, I am
@@ -50,14 +52,14 @@ const HeroSection = () => {
                     <TooltipTrigger asChild>
                       <h1
                         className={cn(
-                          "-ml-[6px] leading-none font-thin text-transparent text-slate-800 text-left",
-                          "font-thin text-7xl md:text-7xl lg:text-8xl xl:text-9xl",
-                          "cursor-default text-edge-outline font-display "
+                          "-ml-[4px] leading-[0.92] font-thin text-transparent text-slate-800 text-left",
+                          "font-thin text-5xl md:text-5xl lg:text-7xl xl:text-8xl",
+                          "cursor-default text-edge-outline font-display ",
                         )}
                       >
-                        {config.author.split(" ")[0]}
+                        {firstName}
                         <br className="md:block hiidden" />
-                        {config.author.split(" ")[1]}
+                        <span className="whitespace-nowrap">{lastName}</span>
                       </h1>
                     </TooltipTrigger>
                     <TooltipContent
@@ -73,14 +75,14 @@ const HeroSection = () => {
                   <p
                     className={cn(
                       "md:self-start md:mt-4 font-thin text-md text-slate-500 dark:text-zinc-400",
-                      "cursor-default font-display sm:text-xl md:text-xl whitespace-nowrap bg-clip-text "
+                      "cursor-default font-display sm:text-xl md:text-xl whitespace-nowrap bg-clip-text ",
                     )}
                   >
                     A Full Stack Web Developer
                   </p>
                 </BlurIn>
               </div>
-              <div className="mt-8 flex flex-col gap-3 w-fit">
+              <div className="mt-6 flex flex-col gap-2 w-fit">
                 <Link
                   href={
                     "https://drive.google.com/file/d/1MTSsUA8V7Po2AsNXT8kZ5sLOpzC8l7qm/view?usp=sharing"
@@ -88,7 +90,7 @@ const HeroSection = () => {
                   target="_blank"
                   className="flex-1"
                 >
-                  <BoxReveal delay={2} width="100%" >
+                  <BoxReveal delay={2} width="100%">
                     <Button className="flex items-center gap-2 w-full">
                       <File size={24} />
                       <p>Resume</p>
@@ -112,10 +114,7 @@ const HeroSection = () => {
                     </TooltipContent>
                   </Tooltip>
                   <div className="flex items-center h-full gap-2">
-                    <Link
-                      href={config.social.twitter}
-                      target="_blank"
-                    >
+                    <Link href={config.social.twitter} target="_blank">
                       <Button variant={"outline"}>
                         <SiX size={24} />
                       </Button>
