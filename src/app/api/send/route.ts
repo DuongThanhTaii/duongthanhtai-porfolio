@@ -2,8 +2,7 @@ import { EmailTemplate } from "@/components/email-template";
 import { config } from "@/data/config";
 import { Resend } from "resend";
 import { z } from "zod";
-
-const resend = new Resend(process.env.RESEND_API_KEY);
+import { getPublicProfile } from "@/lib/public-data";
 
 const rateLimit = new Map<string, { count: number; resetAt: number }>();
 const RATE_LIMIT_MAX = 3;
@@ -41,9 +40,22 @@ export async function POST(req: Request) {
     if (!zodSuccess)
       return Response.json({ error: zodError?.message }, { status: 400 });
 
+    const resendApiKey = process.env.RESEND_API_KEY;
+    if (!resendApiKey) {
+      return Response.json(
+        { error: "Missing RESEND_API_KEY environment variable." },
+        { status: 500 }
+      );
+    }
+
+    const resend = new Resend(resendApiKey);
+
+    const profile = await getPublicProfile();
+    const destinationEmail = profile.email || config.email;
+
     const { data: resendData, error: resendError } = await resend.emails.send({
       from: "Porfolio <onboarding@resend.dev>",
-      to: [config.email],
+      to: [destinationEmail],
       subject: "Contact me from portfolio",
       react: EmailTemplate({
         fullName: zodData.fullName,

@@ -44,18 +44,18 @@ export const background = {
 
 export const blur = {
   initial: {
-    filter: 'blur(0px)',
-    opacity: 1
+    opacity: 1,
+    scale: 1
   },
   open: {
-    filter: 'blur(4px)',
-    opacity: 0.6,
-    transition: { duration: 0.3 }
+    opacity: 0.35,
+    scale: 0.985,
+    transition: { duration: 0.18 }
   },
   closed: {
-    filter: 'blur(0px)',
     opacity: 1,
-    transition: { duration: 0.3 }
+    scale: 1,
+    transition: { duration: 0.18 }
   }
 };
 
