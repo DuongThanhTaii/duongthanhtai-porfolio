@@ -4,97 +4,133 @@ export const useSounds = () => {
   const audioContextRef = useRef<AudioContext | null>(null);
   const pressBufferRef = useRef<AudioBuffer | null>(null);
   const releaseBufferRef = useRef<AudioBuffer | null>(null);
+  const confettiBufferRef = useRef<AudioBuffer | null>(null);
+
+  // Extract loader so we can call it on-demand (e.g., after a user gesture)
+  const loadSound = async () => {
+    try {
+      const AudioContext =
+        window.AudioContext || (window as any).webkitAudioContext;
+      if (!AudioContext) return;
+
+      const ctx = new AudioContext();
+      audioContextRef.current = ctx;
+
+      const response = await fetch("/assets/keycap-sounds/press.mp3");
+      const arrayBuffer = await response.arrayBuffer();
+      const decodedBuffer = await ctx.decodeAudioData(arrayBuffer);
+      pressBufferRef.current = decodedBuffer;
+
+      const releaseResponse = await fetch("/assets/keycap-sounds/release.mp3");
+      const releaseArrayBuffer = await releaseResponse.arrayBuffer();
+      const releaseDecodedBuffer =
+        await ctx.decodeAudioData(releaseArrayBuffer);
+      releaseBufferRef.current = releaseDecodedBuffer;
+
+      const confettiResponse = await fetch("/assets/sounds/vine-boom.mp3");
+      const confettiArrayBuffer = await confettiResponse.arrayBuffer();
+      confettiBufferRef.current =
+        await ctx.decodeAudioData(confettiArrayBuffer);
+    } catch (error) {
+      console.error("Failed to load keycap sound", error);
+    }
+  };
 
   useEffect(() => {
-    const loadSound = async () => {
+    // Try to eagerly load sounds (may be blocked by browser), but also
+    // attach a one-time user-interaction handler to ensure audio context
+    // is created/resumed after a user gesture so playback works.
+    loadSound().catch(() => {});
+
+    const onFirstInteraction = async () => {
       try {
-        const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
-        if (!AudioContext) return;
-
-        const ctx = new AudioContext();
-        audioContextRef.current = ctx;
-
-        const response = await fetch('/assets/keycap-sounds/press.mp3');
-        const arrayBuffer = await response.arrayBuffer();
-        const decodedBuffer = await ctx.decodeAudioData(arrayBuffer);
-        pressBufferRef.current = decodedBuffer;
-
-        const releaseResponse = await fetch('/assets/keycap-sounds/release.mp3');
-        const releaseArrayBuffer = await releaseResponse.arrayBuffer();
-        const releaseDecodedBuffer = await ctx.decodeAudioData(releaseArrayBuffer);
-        releaseBufferRef.current = releaseDecodedBuffer;
-
-        const confettiResponse = await fetch('/assets/sounds/vine-boom.mp3');
-        const confettiArrayBuffer = await confettiResponse.arrayBuffer();
-        confettiBufferRef.current = await ctx.decodeAudioData(confettiArrayBuffer);
-      } catch (error) {
-        console.error("Failed to load keycap sound", error);
+        if (!audioContextRef.current) {
+          await loadSound();
+        } else if (audioContextRef.current.state === "suspended") {
+          await audioContextRef.current.resume();
+        }
+      } catch (e) {
+        // ignore
       }
     };
 
-    loadSound();
+    document.addEventListener("pointerdown", onFirstInteraction, {
+      once: true,
+    });
 
     return () => {
-      audioContextRef.current?.close();
+      document.removeEventListener("pointerdown", onFirstInteraction);
+      try {
+        audioContextRef.current?.close();
+      } catch {}
     };
   }, []);
 
   const getContext = useCallback(() => {
-    if (audioContextRef.current?.state === 'suspended') {
-      audioContextRef.current.resume().catch(() => { });
+    if (audioContextRef.current?.state === "suspended") {
+      audioContextRef.current.resume().catch(() => {});
     }
     return audioContextRef.current;
   }, []);
 
-  const playTone = useCallback((startFreq: number, endFreq: number, duration: number, vol: number) => {
-    try {
-      const ctx = getContext();
-      if (!ctx) return;
-      const oscillator = ctx.createOscillator();
-      const gainNode = ctx.createGain();
+  const playTone = useCallback(
+    (startFreq: number, endFreq: number, duration: number, vol: number) => {
+      try {
+        const ctx = getContext();
+        if (!ctx) return;
+        const oscillator = ctx.createOscillator();
+        const gainNode = ctx.createGain();
 
-      oscillator.type = "sine";
-      const startTime = ctx.currentTime;
+        oscillator.type = "sine";
+        const startTime = ctx.currentTime;
 
-      oscillator.frequency.setValueAtTime(startFreq, startTime);
-      oscillator.frequency.exponentialRampToValueAtTime(endFreq, startTime + duration);
+        oscillator.frequency.setValueAtTime(startFreq, startTime);
+        oscillator.frequency.exponentialRampToValueAtTime(
+          endFreq,
+          startTime + duration,
+        );
 
-      gainNode.gain.setValueAtTime(0, startTime);
-      gainNode.gain.linearRampToValueAtTime(vol, startTime + 0.01);
-      gainNode.gain.exponentialRampToValueAtTime(0.001, startTime + duration);
+        gainNode.gain.setValueAtTime(0, startTime);
+        gainNode.gain.linearRampToValueAtTime(vol, startTime + 0.01);
+        gainNode.gain.exponentialRampToValueAtTime(0.001, startTime + duration);
 
-      oscillator.connect(gainNode);
-      gainNode.connect(ctx.destination);
+        oscillator.connect(gainNode);
+        gainNode.connect(ctx.destination);
 
-      oscillator.start(startTime);
-      oscillator.stop(startTime + duration);
-    } catch (error) {
-      console.error("Failed to play notification sound", error);
-    }
-  }, [getContext]);
+        oscillator.start(startTime);
+        oscillator.stop(startTime + duration);
+      } catch (error) {
+        console.error("Failed to play notification sound", error);
+      }
+    },
+    [getContext],
+  );
 
-  const playSoundBuffer = useCallback((buffer: AudioBuffer | null, baseDetune = 0) => {
-    try {
-      const ctx = getContext();
-      if (!ctx || !buffer) return;
+  const playSoundBuffer = useCallback(
+    (buffer: AudioBuffer | null, baseDetune = 0) => {
+      try {
+        const ctx = getContext();
+        if (!ctx || !buffer) return;
 
-      const source = ctx.createBufferSource();
-      source.buffer = buffer;
+        const source = ctx.createBufferSource();
+        source.buffer = buffer;
 
-      // Add slight variation
-      source.detune.value = baseDetune + (Math.random() * 200) - 100;
+        // Add slight variation
+        source.detune.value = baseDetune + Math.random() * 200 - 100;
 
-      const gainNode = ctx.createGain();
-      gainNode.gain.value = 0.4;
+        const gainNode = ctx.createGain();
+        gainNode.gain.value = 0.4;
 
-      source.connect(gainNode);
-      gainNode.connect(ctx.destination);
+        source.connect(gainNode);
+        gainNode.connect(ctx.destination);
 
-      source.start(0);
-    } catch (err) {
-      console.error(err);
-    }
-  }, [getContext]);
+        source.start(0);
+      } catch (err) {
+        console.error(err);
+      }
+    },
+    [getContext],
+  );
 
   const playPressSound = useCallback(() => {
     playSoundBuffer(pressBufferRef.current);
@@ -114,30 +150,31 @@ export const useSounds = () => {
     playTone(800, 400, 0.35, 0.1);
   }, [playTone]);
 
-  const confettiBufferRef = useRef<AudioBuffer | null>(null);
+  const playConfettiSound = useCallback(
+    (intensity: number = 0.5) => {
+      try {
+        const ctx = getContext();
+        const buffer = confettiBufferRef.current;
+        if (!ctx || !buffer) return;
 
-  const playConfettiSound = useCallback((intensity: number = 0.5) => {
-    try {
-      const ctx = getContext();
-      const buffer = confettiBufferRef.current;
-      if (!ctx || !buffer) return;
+        const source = ctx.createBufferSource();
+        source.buffer = buffer;
+        // Lower intensity = higher pitch (lighter pop), higher = deeper boom
+        source.playbackRate.value = 1.2 - intensity * 0.4;
+        source.detune.value = Math.random() * 100 - 50;
 
-      const source = ctx.createBufferSource();
-      source.buffer = buffer;
-      // Lower intensity = higher pitch (lighter pop), higher = deeper boom
-      source.playbackRate.value = 1.2 - intensity * 0.4;
-      source.detune.value = (Math.random() * 100) - 50;
+        const gainNode = ctx.createGain();
+        gainNode.gain.value = 0.15 + intensity * 0.5;
 
-      const gainNode = ctx.createGain();
-      gainNode.gain.value = 0.15 + intensity * 0.5;
-
-      source.connect(gainNode);
-      gainNode.connect(ctx.destination);
-      source.start(0);
-    } catch (err) {
-      console.error(err);
-    }
-  }, [getContext]);
+        source.connect(gainNode);
+        gainNode.connect(ctx.destination);
+        source.start(0);
+      } catch (err) {
+        console.error(err);
+      }
+    },
+    [getContext],
+  );
 
   // Charge tone — continuous oscillator whose pitch tracks intensity
   const chargeOscRef = useRef<OscillatorNode | null>(null);
@@ -149,7 +186,7 @@ export const useSounds = () => {
       if (!ctx || chargeOscRef.current) return;
 
       const osc = ctx.createOscillator();
-      osc.type = 'sine';
+      osc.type = "sine";
       osc.frequency.value = 200;
 
       const gain = ctx.createGain();
@@ -179,14 +216,21 @@ export const useSounds = () => {
   const stopChargeTone = useCallback(() => {
     try {
       chargeOscRef.current?.stop();
-    } catch { /* already stopped */ }
+    } catch {
+      /* already stopped */
+    }
     chargeOscRef.current = null;
     chargeGainRef.current = null;
   }, []);
 
   return {
-    playSendSound, playReceiveSound, playPressSound, playReleaseSound,
+    playSendSound,
+    playReceiveSound,
+    playPressSound,
+    playReleaseSound,
     playConfettiSound,
-    startChargeTone, updateChargeTone, stopChargeTone,
+    startChargeTone,
+    updateChargeTone,
+    stopChargeTone,
   };
 };

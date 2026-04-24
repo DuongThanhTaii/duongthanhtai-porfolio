@@ -103,3 +103,40 @@ body > canvas {
     pointer-events: auto;
   }
 }
+
+/* Accessible skip link */
+.skip-link {
+  position: absolute;
+  top: 0;
+  left: 0;
+  transform: translateY(-100%);
+  background: rgba(0, 0, 0, 0.8);
+  color: white;
+  padding: 0.5rem 1rem;
+  z-index: 9999;
+  transition: transform 0.2s ease;
+}
+.skip-link:focus {
+  transform: translateY(0%);
+}
+
+/* Better visible focus for keyboard users */
+:focus-visible {
+  outline: 3px solid hsl(210 100% 50% / 0.9);
+  outline-offset: 3px;
+}
+
+/* Respect reduced motion preference */
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0 !important;
+    animation-delay: 0 !important;
+    transition-duration: 0 !important;
+  }
+}
+
+/* Prevent Spline initial flash: keep .spline-root hidden until client removes class */
+.spline-ssr-hidden .spline-root {
+  visibility: hidden !important;
+  opacity: 0 !important;
+}

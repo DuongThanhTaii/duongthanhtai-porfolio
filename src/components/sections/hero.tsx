@@ -1,8 +1,8 @@
 import { cn } from "@/lib/utils";
 import Link from "next/link";
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { Button } from "../ui/button";
-import { File } from "lucide-react";
+import { Download, File } from "lucide-react";
 import {
   Tooltip,
   TooltipContent,
@@ -13,13 +13,34 @@ import { BlurIn, BoxReveal } from "../reveal-animations";
 import ScrollDownIcon from "../scroll-down-icon";
 import { SiGithub, SiLinkedin, SiX } from "react-icons/si";
 import { config } from "@/data/config";
+import type { ProfileDTO } from "@/types/admin";
+import {
+  ResponsiveDialog,
+  ResponsiveDialogContent,
+  ResponsiveDialogTrigger,
+  ResponsiveDialogHeader,
+  ResponsiveDialogTitle,
+} from "../ui/responsive-dialog";
 
 import SectionWrapper from "../ui/section-wrapper";
 
 const HeroSection = () => {
   const { isLoading } = usePreloader();
+  const [profile, setProfile] = useState<ProfileDTO | null>(null);
   const [firstName, ...restNameParts] = config.author.split(" ");
   const lastName = restNameParts.join(" ");
+
+  useEffect(() => {
+    fetch("/api/public/profile")
+      .then((res) => res.json())
+      .then((data: ProfileDTO) => setProfile(data))
+      .catch(() => setProfile(null));
+  }, []);
+
+  const resumeUrl = profile?.resumeUrl ?? null;
+  const resumeViewerUrl = resumeUrl
+    ? `https://docs.google.com/gview?embedded=true&url=${encodeURIComponent(resumeUrl)}`
+    : null;
 
   return (
     <SectionWrapper id="hero" className={cn("relative w-full h-screen")}>
@@ -83,20 +104,54 @@ const HeroSection = () => {
                 </BlurIn>
               </div>
               <div className="mt-6 flex flex-col gap-2 w-fit">
-                <Link
-                  href={
-                    "https://drive.google.com/file/d/1MTSsUA8V7Po2AsNXT8kZ5sLOpzC8l7qm/view?usp=sharing"
-                  }
-                  target="_blank"
-                  className="flex-1"
-                >
-                  <BoxReveal delay={2} width="100%">
-                    <Button className="flex items-center gap-2 w-full">
-                      <File size={24} />
-                      <p>Resume</p>
-                    </Button>
-                  </BoxReveal>
-                </Link>
+                <ResponsiveDialog>
+                  <ResponsiveDialogTrigger asChild>
+                    <div className="flex-1">
+                      <BoxReveal delay={2} width="100%">
+                        <Button className="flex items-center gap-2 w-full">
+                          <File size={24} />
+                          <p>Resume</p>
+                        </Button>
+                      </BoxReveal>
+                    </div>
+                  </ResponsiveDialogTrigger>
+                  <ResponsiveDialogContent className="md:max-w-5xl md:h-[85vh] md:p-0 md:gap-0">
+                    <div className="flex h-full flex-col">
+                      <ResponsiveDialogHeader className="flex items-center justify-center border-b border-border bg-background/80 px-6 py-4">
+                        {/* visually-hidden title for accessibility */}
+                        <ResponsiveDialogTitle className="sr-only">
+                          Resume
+                        </ResponsiveDialogTitle>
+                        {resumeUrl ? (
+                          <a
+                            href={resumeUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            aria-label="Download resume"
+                            title="Download resume"
+                            className="inline-flex items-center justify-center rounded-md border border-zinc-600 p-2 hover:bg-zinc-800"
+                          >
+                            <Download className="h-5 w-5" />
+                          </a>
+                        ) : null}
+                      </ResponsiveDialogHeader>
+                      <div className="h-[72vh] md:h-full bg-zinc-950">
+                        {resumeUrl ? (
+                          <iframe
+                            src={resumeViewerUrl ?? resumeUrl}
+                            title="Resume PDF"
+                            className="h-full w-full"
+                            loading="lazy"
+                          />
+                        ) : (
+                          <div className="grid h-full place-items-center text-zinc-400">
+                            Resume chưa được upload.
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </ResponsiveDialogContent>
+                </ResponsiveDialog>
                 <div className="md:self-start flex gap-3">
                   <Tooltip delayDuration={300}>
                     <TooltipTrigger asChild>
@@ -110,7 +165,7 @@ const HeroSection = () => {
                       </Link>
                     </TooltipTrigger>
                     <TooltipContent side="bottom">
-                      <p>pls 🥹 🙏</p>
+                      <p>please 🙏</p>
                     </TooltipContent>
                   </Tooltip>
                   <div className="flex items-center h-full gap-2">

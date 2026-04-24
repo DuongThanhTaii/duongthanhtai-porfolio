@@ -4,6 +4,7 @@ import { getDb } from "@/db";
 import { projectImages, projects } from "@/db/schema";
 import { requireAdmin } from "@/lib/admin-route";
 import { projectInputSchema } from "@/lib/validators/admin";
+import { destroyCloudinaryResource } from "@/lib/cloudinary";
 
 type RouteContext = {
   params: Promise<{ id: string }>;
@@ -52,6 +53,8 @@ export async function PUT(req: NextRequest, context: RouteContext) {
     }
 
     const payload = parsed.data;
+    const [existingProject] = await db.select().from(projects).where(eq(projects.id, projectId)).limit(1);
+    const existingImages = await db.select().from(projectImages).where(eq(projectImages.projectId, projectId));
 
     await db.transaction(async (tx) => {
       await tx
@@ -88,6 +91,20 @@ export async function PUT(req: NextRequest, context: RouteContext) {
       }
     });
 
+    const keepImageIds = new Set(payload.images.map((image) => image.imagePublicId).filter(Boolean) as string[]);
+    const removedImages = existingImages
+      .map((image) => image.imagePublicId)
+      .filter((id): id is string => Boolean(id) && !keepImageIds.has(id as string));
+
+    const isCoverRemoved =
+      existingProject?.coverImagePublicId &&
+      existingProject.coverImagePublicId !== payload.coverImagePublicId;
+
+    await Promise.allSettled([
+      ...removedImages.map((id) => destroyCloudinaryResource(id, "image")),
+      ...(isCoverRemoved ? [destroyCloudinaryResource(existingProject.coverImagePublicId as string, "image")] : []),
+    ]);
+
     return NextResponse.json({ ok: true });
   } catch (error) {
     return NextResponse.json(
@@ -108,6 +125,19 @@ export async function DELETE(req: NextRequest, context: RouteContext) {
   }
 
   const db = getDb();
+  const [existingProject] = await db.select().from(projects).where(eq(projects.id, projectId)).limit(1);
+  const existingImages = await db.select().from(projectImages).where(eq(projectImages.projectId, projectId));
   await db.delete(projects).where(eq(projects.id, projectId));
+
+  await Promise.allSettled([
+    ...(existingProject?.coverImagePublicId
+      ? [destroyCloudinaryResource(existingProject.coverImagePublicId, "image")]
+      : []),
+    ...existingImages
+      .map((image) => image.imagePublicId)
+      .filter((id): id is string => Boolean(id))
+      .map((id) => destroyCloudinaryResource(id, "image")),
+  ]);
+
   return NextResponse.json({ ok: true });
 }

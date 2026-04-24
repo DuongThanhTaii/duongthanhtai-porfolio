@@ -9,6 +9,7 @@ import Script from "next/script";
 import AppOverlays from "@/components/app-overlays";
 import { Providers } from "@/components/providers";
 import { GoogleAnalytics } from "@next/third-parties/google";
+import PreventScrollClient from "@/components/prevent-scroll-client";
 
 export const metadata: Metadata = {
   title: config.title,
@@ -58,7 +59,16 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className={[inter.variable, archivoBlack.variable, "font-display"].join(" ")} suppressHydrationWarning>
+    <html
+      lang="en"
+      className={[
+        inter.variable,
+        archivoBlack.variable,
+        "font-display",
+        "spline-ssr-hidden",
+      ].join(" ")}
+      suppressHydrationWarning
+    >
       <head>
         <Script
           defer
@@ -68,8 +78,12 @@ export default function RootLayout({
       </head>
       <body>
         <Providers>
+          <PreventScrollClient />
+          <a href="#site-main" className="skip-link sr-only focus:not-sr-only">
+            Skip to content
+          </a>
           <Header />
-          {children}
+          <main id="site-main">{children}</main>
           <Footer />
           <AppOverlays />
         </Providers>

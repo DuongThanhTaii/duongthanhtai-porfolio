@@ -4,12 +4,14 @@ import { profiles, projectImages, projects, socialLinks } from "@/db/schema";
 import { config } from "@/data/config";
 import type { ProfileDTO, ProjectDTO } from "@/types/admin";
 
-const defaultSocialLinks = Object.entries(config.social).map(([platform, url], index) => ({
-  platform,
-  url,
-  isActive: true,
-  sortOrder: index,
-}));
+const defaultSocialLinks = Object.entries(config.social)
+  .filter(([, url]) => typeof url === "string" && url.trim() !== "")
+  .map(([platform, url], index) => ({
+    platform,
+    url,
+    isActive: true,
+    sortOrder: index,
+  }));
 
 export async function getPublicProfile(): Promise<ProfileDTO> {
   try {

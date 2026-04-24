@@ -1,7 +1,27 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import type { ProfileDTO, ProjectDTO, ProjectImageDTO, SocialLinkDTO } from "@/types/admin";
+import Image from "next/image";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import type {
+  ProfileDTO,
+  ProjectDTO,
+  ProjectImageDTO,
+  SocialLinkDTO,
+} from "@/types/admin";
+import {
+  TECH_OPTIONS,
+  findTechOption,
+  formatTechLabel,
+  normalizeTechKey,
+} from "@/lib/tech-options";
+import { Download, Eye, Plus, Trash2 } from "lucide-react";
 
 const emptyProfile: ProfileDTO = {
   author: "",
@@ -35,53 +55,60 @@ export default function AdminPage() {
   const [savingProfile, setSavingProfile] = useState(false);
   const [profile, setProfile] = useState<ProfileDTO>(emptyProfile);
   const [projects, setProjects] = useState<ProjectDTO[]>([]);
-  const [selectedProjectId, setSelectedProjectId] = useState<number | "new">("new");
   const [projectForm, setProjectForm] = useState<ProjectDTO>(emptyProject);
+  const [editingProjectId, setEditingProjectId] = useState<number | null>(null);
   const [savingProject, setSavingProject] = useState(false);
   const [status, setStatus] = useState("");
+  const [projectModalOpen, setProjectModalOpen] = useState(false);
+
+  const frontendOptions = useMemo(
+    () => TECH_OPTIONS.filter((item) => item.group === "frontend"),
+    [],
+  );
+  const backendOptions = useMemo(
+    () => TECH_OPTIONS.filter((item) => item.group === "backend"),
+    [],
+  );
 
   useEffect(() => {
     async function load() {
       setLoading(true);
       setStatus("");
       try {
-        const [profileRes, projectsRes] = await Promise.all([
-          fetch("/api/admin/profile", { cache: "no-store" }),
-          fetch("/api/admin/projects", { cache: "no-store" }),
-        ]);
-
-        if (!profileRes.ok || !projectsRes.ok) {
-          setStatus("Failed to load admin data.");
-          return;
-        }
-
-        const profileData = (await profileRes.json()) as ProfileDTO;
-        const projectsData = (await projectsRes.json()) as ProjectDTO[];
-        setProfile(profileData);
-        setProjects(projectsData);
-        setProjectForm(emptyProject);
+        await Promise.all([loadProfile(), loadProjects()]);
       } finally {
         setLoading(false);
       }
     }
-
     load();
   }, []);
 
-  const selectedProject = useMemo(() => {
-    if (selectedProjectId === "new") return null;
-    return projects.find((project) => project.id === selectedProjectId) ?? null;
-  }, [projects, selectedProjectId]);
-
-  useEffect(() => {
-    if (!selectedProject) {
-      setProjectForm(emptyProject);
+  async function loadProfile() {
+    const profileRes = await fetch("/api/admin/profile", { cache: "no-store" });
+    if (!profileRes.ok) {
+      setStatus("Failed to load profile.");
       return;
     }
-    setProjectForm(selectedProject);
-  }, [selectedProject]);
+    const profileData = (await profileRes.json()) as ProfileDTO;
+    setProfile(profileData);
+  }
 
-  function updateProfileField<K extends keyof ProfileDTO>(key: K, value: ProfileDTO[K]) {
+  async function loadProjects() {
+    const projectsRes = await fetch("/api/admin/projects", {
+      cache: "no-store",
+    });
+    if (!projectsRes.ok) {
+      setStatus("Failed to load projects.");
+      return;
+    }
+    const projectsData = (await projectsRes.json()) as ProjectDTO[];
+    setProjects(projectsData);
+  }
+
+  function updateProfileField<K extends keyof ProfileDTO>(
+    key: K,
+    value: ProfileDTO[K],
+  ) {
     setProfile((prev) => ({ ...prev, [key]: value }));
   }
 
@@ -98,7 +125,12 @@ export default function AdminPage() {
       ...prev,
       socialLinks: [
         ...prev.socialLinks,
-        { platform: "github", url: "https://", isActive: true, sortOrder: prev.socialLinks.length },
+        {
+          platform: "github",
+          url: "https://",
+          isActive: true,
+          sortOrder: prev.socialLinks.length,
+        },
       ],
     }));
   }
@@ -113,6 +145,7 @@ export default function AdminPage() {
   async function onUploadResume(file: File) {
     const formData = new FormData();
     formData.append("file", file);
+
     const response = await fetch("/api/admin/upload/resume", {
       method: "POST",
       body: formData,
@@ -122,11 +155,43 @@ export default function AdminPage() {
       throw new Error(data.error ?? "Resume upload failed.");
     }
 
-    setProfile((prev) => ({
-      ...prev,
+    // update local state
+    const updatedProfile = {
+      ...profile,
       resumeUrl: data.secure_url,
       resumePublicId: data.public_id,
-    }));
+    };
+    setProfile(updatedProfile);
+
+    // persist immediately so public endpoints see the resume
+    const saveRes = await fetch("/api/admin/profile", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(updatedProfile),
+    });
+    const saveData = await saveRes.json();
+    if (!saveRes.ok) {
+      // revert local state on failure
+      setProfile((prev) => ({
+        ...prev,
+        resumeUrl: null,
+        resumePublicId: null,
+      }));
+      throw new Error(saveData.error ?? "Failed to save profile after upload.");
+    }
+    // update state with server-canonical response
+    setProfile(saveData);
+  }
+
+  async function deleteResume() {
+    const response = await fetch("/api/admin/profile/resume", {
+      method: "DELETE",
+    });
+    const data = await response.json();
+    if (!response.ok) {
+      throw new Error(data.error ?? "Failed to delete resume.");
+    }
+    setProfile((prev) => ({ ...prev, resumeUrl: null, resumePublicId: null }));
   }
 
   async function saveProfile() {
@@ -145,13 +210,18 @@ export default function AdminPage() {
       setProfile(data);
       setStatus("Profile updated.");
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : "Failed to save profile.");
+      setStatus(
+        error instanceof Error ? error.message : "Failed to save profile.",
+      );
     } finally {
       setSavingProfile(false);
     }
   }
 
-  function updateProjectField<K extends keyof ProjectDTO>(key: K, value: ProjectDTO[K]) {
+  function updateProjectField<K extends keyof ProjectDTO>(
+    key: K,
+    value: ProjectDTO[K],
+  ) {
     setProjectForm((prev) => ({ ...prev, [key]: value }));
   }
 
@@ -163,38 +233,82 @@ export default function AdminPage() {
     });
   }
 
-  function addProjectImage(url = "") {
+  function addProjectImage(url = "", publicId: string | null = null) {
     setProjectForm((prev) => ({
       ...prev,
-      images: [...prev.images, { imageUrl: url, imagePublicId: null, sortOrder: prev.images.length }],
+      images: [
+        ...prev.images,
+        {
+          imageUrl: url,
+          imagePublicId: publicId,
+          sortOrder: prev.images.length,
+        },
+      ],
     }));
   }
 
   function removeProjectImage(index: number) {
     setProjectForm((prev) => ({
       ...prev,
-      images: prev.images.filter((_, i) => i !== index),
+      images: prev.images
+        .filter((_, i) => i !== index)
+        .map((item, i) => ({ ...item, sortOrder: i })),
     }));
+  }
+
+  function openProjectEditor(project?: ProjectDTO) {
+    if (project?.id) {
+      setEditingProjectId(project.id);
+      setProjectForm({
+        ...project,
+        frontendTech: project.frontendTech.map(
+          (item) => findTechOption(item)?.key ?? normalizeTechKey(item),
+        ),
+        backendTech: project.backendTech.map(
+          (item) => findTechOption(item)?.key ?? normalizeTechKey(item),
+        ),
+      });
+    } else {
+      setEditingProjectId(null);
+      setProjectForm(emptyProject);
+    }
+    setProjectModalOpen(true);
+  }
+
+  function toggleTech(key: string, group: "frontend" | "backend") {
+    setProjectForm((prev) => {
+      const field = group === "frontend" ? "frontendTech" : "backendTech";
+      const hasTech = prev[field].includes(key);
+      const nextValues = hasTech
+        ? prev[field].filter((item) => item !== key)
+        : [...prev[field], key];
+      return { ...prev, [field]: nextValues };
+    });
   }
 
   async function uploadProjectImage(file: File) {
     const formData = new FormData();
     formData.append("file", file);
 
-    const response = await fetch("/api/admin/upload/image", { method: "POST", body: formData });
+    const response = await fetch("/api/admin/upload/image", {
+      method: "POST",
+      body: formData,
+    });
     const data = await response.json();
     if (!response.ok) {
       throw new Error(data.error ?? "Image upload failed.");
     }
-
-    addProjectImage(data.secure_url);
+    addProjectImage(data.secure_url, data.public_id);
   }
 
   async function uploadCoverImage(file: File) {
     const formData = new FormData();
     formData.append("file", file);
 
-    const response = await fetch("/api/admin/upload/image", { method: "POST", body: formData });
+    const response = await fetch("/api/admin/upload/image", {
+      method: "POST",
+      body: formData,
+    });
     const data = await response.json();
     if (!response.ok) {
       throw new Error(data.error ?? "Cover upload failed.");
@@ -216,8 +330,10 @@ export default function AdminPage() {
         githubUrl: projectForm.githubUrl || "",
       };
 
-      const url = selectedProjectId === "new" ? "/api/admin/projects" : `/api/admin/projects/${selectedProjectId}`;
-      const method = selectedProjectId === "new" ? "POST" : "PUT";
+      const url = editingProjectId
+        ? `/api/admin/projects/${editingProjectId}`
+        : "/api/admin/projects";
+      const method = editingProjectId ? "PUT" : "POST";
 
       const response = await fetch(url, {
         method,
@@ -229,36 +345,36 @@ export default function AdminPage() {
         throw new Error(data.error ?? "Failed to save project.");
       }
 
-      const projectsRes = await fetch("/api/admin/projects", { cache: "no-store" });
-      const projectsData = (await projectsRes.json()) as ProjectDTO[];
-      setProjects(projectsData);
+      await loadProjects();
+      setProjectModalOpen(false);
       setStatus("Project saved.");
-      if (selectedProjectId === "new" && data.id) {
-        setSelectedProjectId(data.id);
+      if (!editingProjectId && data.id) {
+        setEditingProjectId(data.id);
       }
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : "Failed to save project.");
+      setStatus(
+        error instanceof Error ? error.message : "Failed to save project.",
+      );
     } finally {
       setSavingProject(false);
     }
   }
 
-  async function deleteProject() {
-    if (selectedProjectId === "new") return;
+  async function deleteProject(projectId: number) {
     const okay = window.confirm("Delete this project?");
     if (!okay) return;
 
     setStatus("");
-    const response = await fetch(`/api/admin/projects/${selectedProjectId}`, { method: "DELETE" });
+    const response = await fetch(`/api/admin/projects/${projectId}`, {
+      method: "DELETE",
+    });
     const data = await response.json();
     if (!response.ok) {
       setStatus(data.error ?? "Delete failed.");
       return;
     }
 
-    setProjects((prev) => prev.filter((project) => project.id !== selectedProjectId));
-    setSelectedProjectId("new");
-    setProjectForm(emptyProject);
+    await loadProjects();
     setStatus("Project deleted.");
   }
 
@@ -268,7 +384,11 @@ export default function AdminPage() {
   }
 
   if (loading) {
-    return <div className="mx-auto max-w-7xl px-4 py-24 text-zinc-300">Loading admin dashboard...</div>;
+    return (
+      <div className="mx-auto max-w-7xl px-4 py-24 text-zinc-300">
+        Loading admin dashboard...
+      </div>
+    );
   }
 
   return (
@@ -276,7 +396,9 @@ export default function AdminPage() {
       <div className="mb-8 flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold">Portfolio Admin</h1>
-          <p className="text-sm text-zinc-400">Private dashboard for your portfolio content.</p>
+          <p className="text-sm text-zinc-400">
+            Manage CV, links and projects from one place.
+          </p>
         </div>
         <button
           onClick={logout}
@@ -286,7 +408,11 @@ export default function AdminPage() {
         </button>
       </div>
 
-      {status ? <p className="mb-4 rounded-md bg-zinc-900 px-3 py-2 text-sm">{status}</p> : null}
+      {status ? (
+        <p className="mb-4 rounded-md bg-zinc-900 px-3 py-2 text-sm">
+          {status}
+        </p>
+      ) : null}
 
       <section className="mb-10 rounded-xl border border-zinc-700 bg-zinc-900/60 p-5">
         <h2 className="mb-4 text-xl font-semibold">Profile, Social & Resume</h2>
@@ -294,26 +420,32 @@ export default function AdminPage() {
           <Field label="Author">
             <input
               value={profile.author}
-              onChange={(event) => updateProfileField("author", event.target.value)}
+              onChange={(event) =>
+                updateProfileField("author", event.target.value)
+              }
               className="input"
             />
           </Field>
           <Field label="Role">
             <input
               value={profile.role}
-              onChange={(event) => updateProfileField("role", event.target.value)}
+              onChange={(event) =>
+                updateProfileField("role", event.target.value)
+              }
               className="input"
             />
           </Field>
           <Field label="Email">
             <input
               value={profile.email}
-              onChange={(event) => updateProfileField("email", event.target.value)}
+              onChange={(event) =>
+                updateProfileField("email", event.target.value)
+              }
               className="input"
             />
           </Field>
           <Field label="Resume PDF">
-            <div className="flex gap-2">
+            <div className="space-y-2">
               <input
                 type="file"
                 accept="application/pdf"
@@ -324,22 +456,55 @@ export default function AdminPage() {
                     await onUploadResume(file);
                     setStatus("Resume uploaded.");
                   } catch (error) {
-                    setStatus(error instanceof Error ? error.message : "Resume upload failed.");
+                    setStatus(
+                      error instanceof Error
+                        ? error.message
+                        : "Resume upload failed.",
+                    );
                   }
                 }}
                 className="input"
               />
+              <div className="flex items-center gap-2">
+                {profile.resumeUrl ? (
+                  <a
+                    href={profile.resumeUrl}
+                    target="_blank"
+                    className="inline-flex items-center gap-1 rounded-md border border-zinc-700 px-2 py-1 text-xs hover:bg-zinc-800"
+                  >
+                    <Eye className="h-3.5 w-3.5" />
+                    Preview
+                  </a>
+                ) : null}
+                {profile.resumeUrl ? (
+                  <button
+                    onClick={async () => {
+                      try {
+                        await deleteResume();
+                        setStatus("Resume deleted.");
+                      } catch (error) {
+                        setStatus(
+                          error instanceof Error
+                            ? error.message
+                            : "Resume delete failed.",
+                        );
+                      }
+                    }}
+                    className="inline-flex items-center gap-1 rounded-md border border-red-700 px-2 py-1 text-xs text-red-300 hover:bg-red-900/40"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                    Delete
+                  </button>
+                ) : null}
+              </div>
             </div>
-            {profile.resumeUrl ? (
-              <a href="/resume" target="_blank" className="mt-1 inline-block text-xs text-cyan-400 hover:underline">
-                Preview resume in website
-              </a>
-            ) : null}
           </Field>
           <Field label="About">
             <textarea
               value={profile.about}
-              onChange={(event) => updateProfileField("about", event.target.value)}
+              onChange={(event) =>
+                updateProfileField("about", event.target.value)
+              }
               className="input min-h-28"
             />
           </Field>
@@ -348,22 +513,32 @@ export default function AdminPage() {
         <div className="mt-6">
           <div className="mb-2 flex items-center justify-between">
             <h3 className="font-medium">Social links</h3>
-            <button onClick={addSocialLink} className="rounded border border-zinc-700 px-2 py-1 text-xs">
+            <button
+              onClick={addSocialLink}
+              className="rounded border border-zinc-700 px-2 py-1 text-xs"
+            >
               Add
             </button>
           </div>
           <div className="space-y-2">
             {profile.socialLinks.map((link, index) => (
-              <div key={`${link.platform}-${index}`} className="grid gap-2 md:grid-cols-5">
+              <div
+                key={`${link.platform}-${index}`}
+                className="grid gap-2 md:grid-cols-5"
+              >
                 <input
                   value={link.platform}
-                  onChange={(event) => updateSocialLink(index, { platform: event.target.value })}
+                  onChange={(event) =>
+                    updateSocialLink(index, { platform: event.target.value })
+                  }
                   className="input md:col-span-1"
                   placeholder="platform"
                 />
                 <input
                   value={link.url}
-                  onChange={(event) => updateSocialLink(index, { url: event.target.value })}
+                  onChange={(event) =>
+                    updateSocialLink(index, { url: event.target.value })
+                  }
                   className="input md:col-span-3"
                   placeholder="url"
                 />
@@ -389,153 +564,230 @@ export default function AdminPage() {
 
       <section className="rounded-xl border border-zinc-700 bg-zinc-900/60 p-5">
         <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-xl font-semibold">Projects CRUD</h2>
-          <select
-            value={selectedProjectId}
-            onChange={(event) => {
-              const value = event.target.value;
-              setSelectedProjectId(value === "new" ? "new" : Number(value));
-            }}
-            className="input w-72"
+          <h2 className="text-xl font-semibold">Projects</h2>
+          <button
+            onClick={() => openProjectEditor()}
+            className="inline-flex items-center gap-2 rounded-md bg-cyan-500 px-4 py-2 text-sm font-semibold text-zinc-950"
           >
-            <option value="new">+ Create new project</option>
-            {projects.map((project) => (
-              <option key={project.id} value={project.id}>
-                {project.title}
-              </option>
-            ))}
-          </select>
+            <Plus className="h-4 w-4" />
+            New project
+          </button>
         </div>
 
-        <div className="grid gap-3 md:grid-cols-2">
-          <Field label="Slug">
-            <input
-              value={projectForm.slug}
-              onChange={(event) => updateProjectField("slug", event.target.value)}
-              className="input"
-            />
-          </Field>
-          <Field label="Title">
-            <input
-              value={projectForm.title}
-              onChange={(event) => updateProjectField("title", event.target.value)}
-              className="input"
-            />
-          </Field>
-          <Field label="Category">
-            <input
-              value={projectForm.category}
-              onChange={(event) => updateProjectField("category", event.target.value)}
-              className="input"
-            />
-          </Field>
-          <Field label="Sort order">
-            <input
-              type="number"
-              value={projectForm.sortOrder}
-              onChange={(event) => updateProjectField("sortOrder", Number(event.target.value))}
-              className="input"
-            />
-          </Field>
-          <Field label="Live URL">
-            <input
-              value={projectForm.liveUrl}
-              onChange={(event) => updateProjectField("liveUrl", event.target.value)}
-              className="input"
-            />
-          </Field>
-          <Field label="GitHub URL">
-            <input
-              value={projectForm.githubUrl ?? ""}
-              onChange={(event) => updateProjectField("githubUrl", event.target.value)}
-              className="input"
-            />
-          </Field>
-          <Field label="Frontend tech (comma separated)">
-            <input
-              value={projectForm.frontendTech.join(", ")}
-              onChange={(event) =>
-                updateProjectField(
-                  "frontendTech",
-                  event.target.value
-                    .split(",")
-                    .map((item) => item.trim())
-                    .filter(Boolean)
-                )
-              }
-              className="input"
-            />
-          </Field>
-          <Field label="Backend tech (comma separated)">
-            <input
-              value={projectForm.backendTech.join(", ")}
-              onChange={(event) =>
-                updateProjectField(
-                  "backendTech",
-                  event.target.value
-                    .split(",")
-                    .map((item) => item.trim())
-                    .filter(Boolean)
-                )
-              }
-              className="input"
-            />
-          </Field>
-          <Field label="Published">
-            <label className="inline-flex items-center gap-2 text-sm">
+        <div className="grid gap-4 md:grid-cols-2">
+          {projects.map((project) => (
+            <article
+              key={project.id}
+              className="rounded-lg border border-zinc-700 bg-zinc-950/60 p-4"
+            >
+              <div className="mb-3 flex items-start justify-between gap-3">
+                <div>
+                  <h3 className="font-semibold">{project.title}</h3>
+                  <p className="text-xs text-zinc-400">
+                    {project.category} ·{" "}
+                    {project.isPublished ? "Published" : "Hidden"}
+                  </p>
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => openProjectEditor(project)}
+                    className="rounded border border-zinc-700 px-2 py-1 text-xs hover:border-zinc-500"
+                  >
+                    Edit
+                  </button>
+                  {project.id ? (
+                    <button
+                      onClick={() => deleteProject(project.id as number)}
+                      className="rounded border border-red-700 px-2 py-1 text-xs text-red-300 hover:bg-red-950/40"
+                    >
+                      Delete
+                    </button>
+                  ) : null}
+                </div>
+              </div>
+
+              {project.coverImageUrl ? (
+                <div className="mb-3 overflow-hidden rounded-md border border-zinc-800">
+                  <Image
+                    src={project.coverImageUrl}
+                    alt={project.title}
+                    width={900}
+                    height={450}
+                    className="h-32 w-full object-cover"
+                  />
+                </div>
+              ) : null}
+
+              <p className="text-sm text-zinc-300">
+                {project.shortDescription}
+              </p>
+
+              <div className="mt-3 space-y-2 text-xs text-zinc-400">
+                <div className="flex flex-wrap gap-2">
+                  {project.frontendTech.map((tech) => (
+                    <TechTag key={`fe-${tech}`} value={tech} />
+                  ))}
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {project.backendTech.map((tech) => (
+                    <TechTag key={`be-${tech}`} value={tech} />
+                  ))}
+                </div>
+              </div>
+            </article>
+          ))}
+        </div>
+      </section>
+
+      <Dialog open={projectModalOpen} onOpenChange={setProjectModalOpen}>
+        <DialogContent className="max-h-[92vh] max-w-5xl overflow-y-auto border-zinc-800 bg-zinc-950 text-zinc-200">
+          <DialogHeader>
+            <DialogTitle>
+              {editingProjectId ? "Edit project" : "Create project"}
+            </DialogTitle>
+            <DialogDescription>
+              Fill details, upload screenshots and pick frontend/backend icons.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="grid gap-4 md:grid-cols-2">
+            <Field label="Slug">
               <input
-                type="checkbox"
-                checked={projectForm.isPublished}
-                onChange={(event) => updateProjectField("isPublished", event.target.checked)}
-              />
-              Show this project on public site
-            </label>
-          </Field>
-          <Field label="Cover image">
-            <div className="space-y-2">
-              <input
-                value={projectForm.coverImageUrl ?? ""}
-                onChange={(event) => updateProjectField("coverImageUrl", event.target.value)}
+                value={projectForm.slug}
+                onChange={(event) =>
+                  updateProjectField("slug", event.target.value)
+                }
                 className="input"
-                placeholder="https://..."
+                placeholder="duong-portfolio"
               />
+            </Field>
+            <Field label="Title">
               <input
-                type="file"
-                accept="image/*"
-                onChange={async (event) => {
-                  const file = event.target.files?.[0];
-                  if (!file) return;
-                  try {
-                    await uploadCoverImage(file);
-                    setStatus("Cover uploaded.");
-                  } catch (error) {
-                    setStatus(error instanceof Error ? error.message : "Cover upload failed.");
+                value={projectForm.title}
+                onChange={(event) =>
+                  updateProjectField("title", event.target.value)
+                }
+                className="input"
+              />
+            </Field>
+            <Field label="Category">
+              <input
+                value={projectForm.category}
+                onChange={(event) =>
+                  updateProjectField("category", event.target.value)
+                }
+                className="input"
+              />
+            </Field>
+            <Field label="Sort order">
+              <input
+                type="number"
+                value={projectForm.sortOrder}
+                onChange={(event) =>
+                  updateProjectField("sortOrder", Number(event.target.value))
+                }
+                className="input"
+              />
+            </Field>
+            <Field label="Live URL">
+              <input
+                value={projectForm.liveUrl}
+                onChange={(event) =>
+                  updateProjectField("liveUrl", event.target.value)
+                }
+                className="input"
+              />
+            </Field>
+            <Field label="GitHub URL">
+              <input
+                value={projectForm.githubUrl ?? ""}
+                onChange={(event) =>
+                  updateProjectField("githubUrl", event.target.value)
+                }
+                className="input"
+              />
+            </Field>
+            <Field label="Published">
+              <label className="inline-flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={projectForm.isPublished}
+                  onChange={(event) =>
+                    updateProjectField("isPublished", event.target.checked)
                   }
-                }}
-                className="input"
+                />
+                Show this project on public site
+              </label>
+            </Field>
+            <Field label="Cover image">
+              <div className="space-y-2">
+                <input
+                  value={projectForm.coverImageUrl ?? ""}
+                  onChange={(event) =>
+                    updateProjectField("coverImageUrl", event.target.value)
+                  }
+                  className="input"
+                  placeholder="https://..."
+                />
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={async (event) => {
+                    const file = event.target.files?.[0];
+                    if (!file) return;
+                    try {
+                      await uploadCoverImage(file);
+                      setStatus("Cover uploaded.");
+                    } catch (error) {
+                      setStatus(
+                        error instanceof Error
+                          ? error.message
+                          : "Cover upload failed.",
+                      );
+                    }
+                  }}
+                  className="input"
+                />
+              </div>
+            </Field>
+            <Field label="Short description">
+              <textarea
+                value={projectForm.shortDescription}
+                onChange={(event) =>
+                  updateProjectField("shortDescription", event.target.value)
+                }
+                className="input min-h-24"
               />
-            </div>
-          </Field>
-          <Field label="Short description">
-            <textarea
-              value={projectForm.shortDescription}
-              onChange={(event) => updateProjectField("shortDescription", event.target.value)}
-              className="input min-h-24"
-            />
-          </Field>
-          <Field label="Long description">
-            <textarea
-              value={projectForm.longDescription}
-              onChange={(event) => updateProjectField("longDescription", event.target.value)}
-              className="input min-h-36"
-            />
-          </Field>
-        </div>
+            </Field>
+            <Field label="Long description">
+              <textarea
+                value={projectForm.longDescription}
+                onChange={(event) =>
+                  updateProjectField("longDescription", event.target.value)
+                }
+                className="input min-h-36"
+              />
+            </Field>
+          </div>
 
-        <div className="mt-6">
-          <div className="mb-2 flex items-center justify-between">
-            <h3 className="font-medium">Project screenshots</h3>
-            <div className="flex items-center gap-2">
+          <div className="mt-4 grid gap-4 md:grid-cols-2">
+            <TechSelector
+              title="Frontend Tech Icons"
+              selected={projectForm.frontendTech}
+              options={frontendOptions}
+              onToggle={(key) => toggleTech(key, "frontend")}
+            />
+            <TechSelector
+              title="Backend Tech Icons"
+              selected={projectForm.backendTech}
+              options={backendOptions}
+              onToggle={(key) => toggleTech(key, "backend")}
+            />
+          </div>
+
+          <div className="mt-6">
+            <div className="mb-2 flex items-center justify-between">
+              <h3 className="font-medium">Project screenshots</h3>
               <input
                 type="file"
                 accept="image/*"
@@ -546,63 +798,140 @@ export default function AdminPage() {
                     await uploadProjectImage(file);
                     setStatus("Screenshot uploaded.");
                   } catch (error) {
-                    setStatus(error instanceof Error ? error.message : "Upload failed.");
+                    setStatus(
+                      error instanceof Error ? error.message : "Upload failed.",
+                    );
                   }
                 }}
                 className="input w-64"
               />
-              <button onClick={() => addProjectImage()} className="rounded border border-zinc-700 px-2 py-1 text-xs">
-                Add empty field
-              </button>
+            </div>
+            <div className="grid gap-3 md:grid-cols-3">
+              {projectForm.images.map((image, index) => (
+                <div
+                  key={index}
+                  className="rounded-md border border-zinc-800 bg-zinc-900 p-2"
+                >
+                  <div className="mb-2 h-24 overflow-hidden rounded bg-zinc-950">
+                    {image.imageUrl ? (
+                      <Image
+                        src={image.imageUrl}
+                        alt={`Screenshot ${index + 1}`}
+                        width={400}
+                        height={220}
+                        className="h-full w-full object-cover"
+                      />
+                    ) : (
+                      <div className="grid h-full place-items-center text-xs text-zinc-500">
+                        No image
+                      </div>
+                    )}
+                  </div>
+                  <input
+                    value={image.imageUrl}
+                    onChange={(event) =>
+                      updateProjectImage(index, {
+                        imageUrl: event.target.value,
+                      })
+                    }
+                    className="input mb-2 text-xs"
+                    placeholder="https://..."
+                  />
+                  <button
+                    onClick={() => removeProjectImage(index)}
+                    className="w-full rounded border border-red-700 px-2 py-1 text-xs text-red-300 hover:bg-red-900/40"
+                  >
+                    Remove
+                  </button>
+                </div>
+              ))}
             </div>
           </div>
-          <div className="space-y-2">
-            {projectForm.images.map((image, index) => (
-              <div key={index} className="grid gap-2 md:grid-cols-6">
-                <input
-                  value={image.imageUrl}
-                  onChange={(event) => updateProjectImage(index, { imageUrl: event.target.value })}
-                  className="input md:col-span-5"
-                  placeholder="https://..."
-                />
-                <button
-                  onClick={() => removeProjectImage(index)}
-                  className="rounded border border-zinc-700 px-2 py-1 text-xs hover:border-red-500"
-                >
-                  Remove
-                </button>
-              </div>
-            ))}
-          </div>
-        </div>
 
-        <div className="mt-6 flex gap-3">
-          <button
-            onClick={saveProject}
-            disabled={savingProject}
-            className="rounded-md bg-cyan-500 px-4 py-2 text-sm font-semibold text-zinc-950 disabled:opacity-60"
-          >
-            {savingProject ? "Saving..." : "Save project"}
-          </button>
-          {selectedProjectId !== "new" ? (
+          <div className="mt-6 flex justify-end gap-3">
             <button
-              onClick={deleteProject}
-              className="rounded-md border border-red-600 px-4 py-2 text-sm text-red-400 hover:bg-red-950/40"
+              onClick={() => setProjectModalOpen(false)}
+              className="rounded-md border border-zinc-700 px-4 py-2 text-sm"
             >
-              Delete project
+              Cancel
             </button>
-          ) : null}
-        </div>
-      </section>
+            <button
+              onClick={saveProject}
+              disabled={savingProject}
+              className="rounded-md bg-cyan-500 px-4 py-2 text-sm font-semibold text-zinc-950 disabled:opacity-60"
+            >
+              {savingProject ? "Saving..." : "Save project"}
+            </button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </main>
   );
 }
 
-function Field({ label, children }: { label: string; children: import("react").ReactNode }) {
+function Field({
+  label,
+  children,
+}: {
+  label: string;
+  children: import("react").ReactNode;
+}) {
   return (
     <label className="space-y-1">
-      <span className="text-xs uppercase tracking-wide text-zinc-400">{label}</span>
+      <span className="text-xs uppercase tracking-wide text-zinc-400">
+        {label}
+      </span>
       {children}
     </label>
+  );
+}
+
+function TechSelector({
+  title,
+  selected,
+  options,
+  onToggle,
+}: {
+  title: string;
+  selected: string[];
+  options: typeof TECH_OPTIONS;
+  onToggle: (key: string) => void;
+}) {
+  return (
+    <div className="rounded-md border border-zinc-800 bg-zinc-900/70 p-3">
+      <p className="mb-2 text-xs uppercase tracking-wide text-zinc-400">
+        {title}
+      </p>
+      <div className="grid grid-cols-2 gap-2">
+        {options.map((option) => {
+          const active = selected.includes(option.key);
+          return (
+            <button
+              key={option.key}
+              type="button"
+              onClick={() => onToggle(option.key)}
+              className={`inline-flex items-center gap-2 rounded-md border px-2 py-1 text-xs transition ${
+                active
+                  ? "border-cyan-500 bg-cyan-900/30 text-cyan-100"
+                  : "border-zinc-700 text-zinc-300 hover:border-zinc-500"
+              }`}
+            >
+              <span className="text-base">{option.icon}</span>
+              {option.label}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function TechTag({ value }: { value: string }) {
+  const option = findTechOption(value);
+  return (
+    <span className="inline-flex items-center gap-1 rounded-full border border-zinc-700 px-2 py-0.5 text-[11px]">
+      <span className="text-sm">{option?.icon ?? null}</span>
+      {formatTechLabel(value)}
+    </span>
   );
 }

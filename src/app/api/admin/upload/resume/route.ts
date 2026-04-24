@@ -17,11 +17,17 @@ export async function POST(req: NextRequest) {
     }
 
     if (file.type !== "application/pdf") {
-      return NextResponse.json({ error: "Only PDF is supported." }, { status: 400 });
+      return NextResponse.json(
+        { error: "Only PDF is supported." },
+        { status: 400 },
+      );
     }
 
     if (file.size > MAX_RESUME_SIZE_BYTES) {
-      return NextResponse.json({ error: "PDF must be <= 6MB." }, { status: 400 });
+      return NextResponse.json(
+        { error: "PDF must be <= 6MB." },
+        { status: 400 },
+      );
     }
 
     const buffer = Buffer.from(await file.arrayBuffer());
@@ -29,10 +35,19 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json(uploadResult);
   } catch (error) {
+    // log full error on server for debugging
+    // ensure we return a useful error string to the client
+    console.error("Resume upload error:", error);
+    const message =
+      error instanceof Error
+        ? error.message
+        : typeof error === "object"
+          ? JSON.stringify(error)
+          : String(error);
+
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Resume upload failed." },
-      { status: 500 }
+      { error: message || "Resume upload failed." },
+      { status: 500 },
     );
   }
 }
-
