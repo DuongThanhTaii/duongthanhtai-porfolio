@@ -63,10 +63,13 @@ function uploadBuffer(
 }
 
 export async function uploadResumePdf(buffer: Buffer, fileName: string) {
+  // Use a sanitized, unique public id to avoid invalid characters and collisions
+  const baseName = fileName.replace(/\.pdf$/i, "").replace(/[^a-zA-Z0-9-_]/g, "_");
+  const publicId = `${baseName}_${Date.now()}`;
   return uploadBuffer(buffer, {
     folder: "portfolio/resumes",
     resourceType: "raw",
-    publicId: fileName.replace(/\.pdf$/i, ""),
+    publicId,
   });
 }
 

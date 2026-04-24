@@ -5,6 +5,7 @@ import { profiles, socialLinks } from "@/db/schema";
 import { requireAdmin } from "@/lib/admin-route";
 import { profileUpdateSchema } from "@/lib/validators/admin";
 import { getPublicProfile } from "@/lib/public-data";
+import { destroyCloudinaryResource } from "@/lib/cloudinary";
 
 export async function GET(req: NextRequest) {
   const auth = await requireAdmin(req);
@@ -28,6 +29,9 @@ export async function PUT(req: NextRequest) {
     }
 
     const payload = parsed.data;
+
+    // read existing profile before update so we can clean up old resume
+    const [existingProfile] = await db.select().from(profiles).limit(1);
 
     await db.transaction(async (tx) => {
       const [existing] = await tx.select().from(profiles).limit(1);
@@ -71,6 +75,20 @@ export async function PUT(req: NextRequest) {
     });
 
     const [profile] = await db.select().from(profiles).limit(1);
+
+    // If resume was replaced, attempt to delete the old resource from Cloudinary
+    try {
+      if (
+        existingProfile &&
+        existingProfile.resumePublicId &&
+        existingProfile.resumePublicId !== payload.resumePublicId
+      ) {
+        await destroyCloudinaryResource(existingProfile.resumePublicId, "raw");
+      }
+    } catch (e) {
+      // log and continue; don't block the response on cleanup failures
+      console.warn("Failed to destroy old resume resource", e);
+    }
     const links = await db.select().from(socialLinks).orderBy(asc(socialLinks.sortOrder), asc(socialLinks.id));
 
     return NextResponse.json({
