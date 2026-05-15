@@ -103,3 +103,13 @@ body > canvas {
     pointer-events: auto;
   }
 }
+
+@layer components {
+  .input {
+    @apply flex w-full rounded-md border border-zinc-700 bg-zinc-900/50 px-3 py-2 text-sm text-zinc-100 placeholder:text-zinc-500 focus:border-cyan-500 focus:outline-none focus:ring-1 focus:ring-cyan-500 transition-colors duration-200;
+  }
+  
+  input[type="file"].input {
+    @apply p-0 file:mr-4 file:cursor-pointer file:border-0 file:bg-zinc-800 file:px-4 file:py-2.5 file:text-sm file:font-medium file:text-zinc-200 file:transition-colors hover:file:bg-zinc-700;
+  }
+}

@@ -8,10 +8,11 @@ import ProjectsSection from "@/components/sections/projects";
 import ContactSection from "@/components/sections/contact";
 import HeroSection from "@/components/sections/hero";
 import { getCloudinaryRawUrl } from "@/lib/cloudinary";
-import { getPublicProfile } from "@/lib/public-data";
+import { getPublicProfile, getPublicProjects } from "@/lib/public-data";
 
 export default async function MainPage() {
   const profile = await getPublicProfile();
+  const dbProjects = await getPublicProjects();
   const resumeUrl =
     profile.resumeUrl ??
     (profile.resumePublicId
@@ -35,7 +36,7 @@ export default async function MainPage() {
         />
         <SkillsSection />
         <ExperienceSection />
-        <ProjectsSection />
+        <ProjectsSection projects={dbProjects} />
         <ContactSection />
       </main>
     </SmoothScroll>

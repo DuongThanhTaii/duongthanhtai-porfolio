@@ -2,10 +2,9 @@ import { z } from "zod";
 
 const urlSchema = z
   .string()
-  .url("Invalid URL format")
   .refine(
-    (value) => /^https?:\/\//i.test(value),
-    "URL must start with http:// or https://",
+    (value) => value === "#" || /^https?:\/\//i.test(value) || /^\/[a-zA-Z0-9_-]/i.test(value),
+    "URL must start with http://, https://, /, or be #"
   );
 
 export const adminLoginSchema = z.object({
@@ -35,17 +34,17 @@ export const profileUpdateSchema = z.object({
 export const projectInputSchema = z.object({
   slug: z
     .string()
-    .min(3)
+    .min(1)
     .max(180)
     .regex(
-      /^[a-z0-9]+(?:-[a-z0-9]+)*$/,
-      "Slug must be lowercase and hyphenated.",
+      /^[a-z0-9.-]+$/,
+      "Slug must be lowercase, numbers, hyphens, or dots.",
     ),
-  title: z.string().min(2).max(180),
-  category: z.string().min(2).max(100),
-  shortDescription: z.string().min(10).max(500),
-  longDescription: z.string().max(5000).default(""),
-  coverImageUrl: z.string().url().nullable().optional(),
+  title: z.string().min(1).max(180),
+  category: z.string().min(1).max(100),
+  shortDescription: z.string().min(1).max(1000),
+  longDescription: z.string().max(500000).default(""),
+  coverImageUrl: z.union([z.string().min(1), z.literal(""), z.null()]).optional(),
   coverImagePublicId: z.string().nullable().optional(),
   liveUrl: urlSchema,
   githubUrl: z.union([urlSchema, z.literal(""), z.null()]).optional(),
@@ -57,7 +56,7 @@ export const projectInputSchema = z.object({
     .array(
       z.object({
         id: z.number().int().optional(),
-        imageUrl: z.string().url(),
+        imageUrl: z.string().min(1),
         imagePublicId: z.string().nullable().optional(),
         sortOrder: z.number().int().min(0).default(0),
       }),

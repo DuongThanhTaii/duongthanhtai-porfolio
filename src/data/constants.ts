@@ -258,15 +258,15 @@ export type Experience = {
 export const EXPERIENCE: Experience[] = [
   {
     id: 1,
-    startDate: "Dec 2024",
+    startDate: "Sep 2025",
     endDate: "Present",
-    title: "Full Stack Developer",
-    company: "OmniNexus Sdn Bhd",
+    title: "Undergraduate AI Researcher",
+    company: "Ho Chi Minh City University of Education (HCMUE)",
     description: [
-      "Built a custom image editor from scratch, cutting $4.8k/year in SaaS costs.",
-      "Architected async job queues processing 1k+ AI tasks daily with bulletproof reliability.",
-      "Optimized media delivery pipeline, slashing asset load times by 40%.",
-      "Shipped high-impact features end-to-end from requirements to production.",
+      "Designed MultiscaleBAM, a Bayesian adapter module for single-pass aleatoric uncertainty estimation to improve model reliability.",
+      "Conducted self-supervised cross-domain pretraining (I-JEPA) on 225K+ chest X-rays, improving downstream AUROC by +4.6.",
+      "Implemented Homoscedastic Uncertainty Weighting to stabilize multi-task training and reduce manual tuning.",
+      "Built dataset preprocessing pipelines (cleaning, augmentation, splitting) and evaluation scripts for reproducible experiments.",
     ],
     skills: [
       SkillNames.NEXTJS,
@@ -281,8 +281,8 @@ export const EXPERIENCE: Experience[] = [
   },
   {
     id: 2,
-    startDate: "Apr 2022",
-    endDate: "Dec 2024",
+    startDate: "Apr 2024",
+    endDate: "Present",
     title: "Freelance Full Stack Developer",
     company: "Self-employed",
     description: [
@@ -292,14 +292,14 @@ export const EXPERIENCE: Experience[] = [
       "Focused on clean, maintainable code and interfaces that users actually enjoy.",
     ],
     skills: [
+      SkillNames.NEXTJS,
+      SkillNames.TS,
       SkillNames.REACT,
       SkillNames.VUE,
       SkillNames.NODEJS,
       SkillNames.EXPRESS,
       SkillNames.MONGODB,
       SkillNames.POSTGRES,
-      SkillNames.TAILWIND,
-      SkillNames.WORDPRESS,
     ],
   },
 ];

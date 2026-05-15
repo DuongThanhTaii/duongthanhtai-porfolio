@@ -5,6 +5,7 @@ import type {
   ProfileDTO,
   ProjectDTO,
   ProjectImageDTO,
+  ProjectSection,
   SocialLinkDTO,
 } from "@/types/admin";
 
@@ -98,6 +99,7 @@ export default function AdminPage() {
   );
   const [projectForm, setProjectForm] = useState<ProjectDTO>(emptyProject);
   const [savingProject, setSavingProject] = useState(false);
+  const [sections, setSections] = useState<ProjectSection[]>([]);
   const [status, setStatus] = useState("");
   const [customFrontend, setCustomFrontend] = useState("");
   const [customBackend, setCustomBackend] = useState("");
@@ -132,6 +134,7 @@ export default function AdminPage() {
         setProfile(profileData);
         setProjects(projectsData);
         setProjectForm(emptyProject);
+        setSections([]);
       } finally {
         setLoading(false);
       }
@@ -148,9 +151,24 @@ export default function AdminPage() {
   useEffect(() => {
     if (!selectedProject) {
       setProjectForm(emptyProject);
+      setSections([]);
       return;
     }
     setProjectForm(selectedProject);
+    try {
+      const parsed = JSON.parse(selectedProject.longDescription);
+      if (Array.isArray(parsed)) {
+        setSections(parsed);
+      } else {
+        setSections([{ id: "legacy", title: "Details", content: selectedProject.longDescription, images: [] }]);
+      }
+    } catch {
+      if (selectedProject.longDescription) {
+        setSections([{ id: "legacy", title: "Details", content: selectedProject.longDescription, images: [] }]);
+      } else {
+        setSections([]);
+      }
+    }
   }, [selectedProject]);
 
   function updateProfileField<K extends keyof ProfileDTO>(
@@ -303,6 +321,63 @@ export default function AdminPage() {
     }));
   }
 
+  function addSection() {
+    setSections((prev) => [
+      ...prev,
+      { id: Date.now().toString(), title: "", content: "", images: [] },
+    ]);
+  }
+
+  function updateSection(index: number, patch: Partial<ProjectSection>) {
+    setSections((prev) => {
+      const next = [...prev];
+      next[index] = { ...next[index], ...patch };
+      return next;
+    });
+  }
+
+  function removeSection(index: number) {
+    setSections((prev) => prev.filter((_, i) => i !== index));
+  }
+
+  function addSectionImage(sectionIndex: number, url: string) {
+    setSections((prev) => {
+      const next = [...prev];
+      next[sectionIndex] = {
+        ...next[sectionIndex],
+        images: [...next[sectionIndex].images, url],
+      };
+      return next;
+    });
+  }
+
+  function removeSectionImage(sectionIndex: number, imageIndex: number) {
+    setSections((prev) => {
+      const next = [...prev];
+      next[sectionIndex] = {
+        ...next[sectionIndex],
+        images: next[sectionIndex].images.filter((_, i) => i !== imageIndex),
+      };
+      return next;
+    });
+  }
+
+  async function uploadSectionImage(file: File, sectionIndex: number) {
+    const formData = new FormData();
+    formData.append("file", file);
+
+    const response = await fetch("/api/admin/upload/image", {
+      method: "POST",
+      body: formData,
+    });
+    const data = await response.json();
+    if (!response.ok) {
+      throw new Error(data.error ?? "Image upload failed.");
+    }
+
+    addSectionImage(sectionIndex, data.secure_url);
+  }
+
   async function uploadProjectImage(file: File) {
     const formData = new FormData();
     formData.append("file", file);
@@ -343,8 +418,11 @@ export default function AdminPage() {
     setSavingProject(true);
     setStatus("");
     try {
+      const generatedSlug = projectForm.slug || projectForm.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
       const payload = {
         ...projectForm,
+        slug: generatedSlug,
+        longDescription: JSON.stringify(sections),
         githubUrl: projectForm.githubUrl || "",
       };
 
@@ -402,6 +480,7 @@ export default function AdminPage() {
     );
     setSelectedProjectId("new");
     setProjectForm(emptyProject);
+    setSections([]);
     setStatus("Project deleted.");
   }
 
@@ -441,9 +520,12 @@ export default function AdminPage() {
         </p>
       ) : null}
 
-      <section className="mb-10 rounded-xl border border-zinc-700 bg-zinc-900/60 p-5">
-        <h2 className="mb-4 text-xl font-semibold">Profile, Social & Resume</h2>
-        <div className="grid gap-4 md:grid-cols-2">
+      <section className="mb-10 overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-950/40 shadow-xl backdrop-blur-md">
+        <div className="border-b border-zinc-800 bg-zinc-900/40 px-6 py-4">
+          <h2 className="text-xl font-semibold text-zinc-100">Profile, Social & Resume</h2>
+        </div>
+        <div className="p-6">
+          <div className="grid gap-6 md:grid-cols-2">
           <Field label="Author">
             <input
               value={profile.author}
@@ -556,31 +638,31 @@ export default function AdminPage() {
               Add
             </button>
           </div>
-          <div className="space-y-2">
+          <div className="space-y-3">
             {profile.socialLinks.map((link, index) => (
               <div
                 key={`${link.platform}-${index}`}
-                className="grid gap-2 md:grid-cols-5"
+                className="group flex flex-col gap-2 rounded-xl border border-zinc-800 bg-zinc-900/30 p-3 md:flex-row md:items-center transition-colors hover:border-zinc-700"
               >
                 <input
                   value={link.platform}
                   onChange={(event) =>
                     updateSocialLink(index, { platform: event.target.value })
                   }
-                  className="input md:col-span-1"
-                  placeholder="platform"
+                  className="input md:w-1/3"
+                  placeholder="Platform (e.g. GitHub)"
                 />
                 <input
                   value={link.url}
                   onChange={(event) =>
                     updateSocialLink(index, { url: event.target.value })
                   }
-                  className="input md:col-span-3"
-                  placeholder="url"
+                  className="input flex-1"
+                  placeholder="https://..."
                 />
                 <button
                   onClick={() => removeSocialLink(index)}
-                  className="rounded border border-zinc-700 px-2 py-1 text-xs hover:border-red-500"
+                  className="rounded-md border border-zinc-700 bg-zinc-800/50 px-3 py-2 text-xs font-medium text-zinc-300 transition-colors hover:border-red-500/50 hover:bg-red-500/10 hover:text-red-400"
                 >
                   Remove
                 </button>
@@ -589,18 +671,21 @@ export default function AdminPage() {
           </div>
         </div>
 
-        <button
-          onClick={saveProfile}
-          disabled={savingProfile}
-          className="mt-6 rounded-md bg-cyan-500 px-4 py-2 text-sm font-semibold text-zinc-950 disabled:opacity-60"
-        >
-          {savingProfile ? "Saving..." : "Save profile"}
-        </button>
+          <div className="mt-8 flex justify-end">
+            <button
+              onClick={saveProfile}
+              disabled={savingProfile}
+              className="rounded-lg bg-cyan-500 px-6 py-2.5 text-sm font-bold text-cyan-950 shadow-lg shadow-cyan-500/20 transition-all hover:bg-cyan-400 disabled:opacity-60"
+            >
+              {savingProfile ? "Saving..." : "Save profile"}
+            </button>
+          </div>
+        </div>
       </section>
 
-      <section className="rounded-xl border border-zinc-700 bg-zinc-900/60 p-5">
-        <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-xl font-semibold">Projects CRUD</h2>
+      <section className="overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-950/40 shadow-xl backdrop-blur-md">
+        <div className="flex flex-wrap items-center justify-between gap-4 border-b border-zinc-800 bg-zinc-900/40 px-6 py-4">
+          <h2 className="text-xl font-semibold text-zinc-100">Projects CRUD</h2>
           <select
             value={selectedProjectId}
             onChange={(event) => {
@@ -617,8 +702,9 @@ export default function AdminPage() {
             ))}
           </select>
         </div>
-        <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_320px]">
-          <div className="rounded-2xl border border-zinc-700 bg-zinc-950/70 p-5">
+        <div className="p-6">
+          <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_340px]">
+            <div className="flex flex-col gap-6 rounded-2xl border border-zinc-800 bg-zinc-900/20 p-6">
             <div className="flex flex-wrap items-start justify-between gap-4">
               <div className="min-w-0 flex-1">
                 <input
@@ -875,17 +961,90 @@ export default function AdminPage() {
                   placeholder="Short description for the modal"
                 />
               </label>
-              <label className="space-y-2 text-xs uppercase tracking-widest text-zinc-400">
-                <span>Details</span>
-                <textarea
-                  value={projectForm.longDescription}
-                  onChange={(event) =>
-                    updateProjectField("longDescription", event.target.value)
-                  }
-                  className="input min-h-36"
-                  placeholder="Longer description, goals, and outcome"
-                />
-              </label>
+            </div>
+
+            <div className="mt-8">
+              <div className="mb-4 flex items-center justify-between">
+                <h3 className="text-sm font-medium uppercase tracking-widest text-zinc-400">Content Sections</h3>
+                <button
+                  onClick={addSection}
+                  className="rounded border border-zinc-700 px-3 py-1.5 text-xs font-semibold hover:bg-zinc-800"
+                >
+                  + Add Section
+                </button>
+              </div>
+              <div className="space-y-6">
+                {sections.length === 0 ? (
+                  <div className="rounded-xl border border-dashed border-zinc-800 p-8 text-center text-sm text-zinc-500">
+                    No sections added yet. Click "+ Add Section" to build your project content.
+                  </div>
+                ) : (
+                  sections.map((section, sIdx) => (
+                    <div key={section.id || sIdx} className="rounded-xl border border-zinc-700 bg-zinc-900/30 p-5 relative group">
+                      <button
+                        onClick={() => removeSection(sIdx)}
+                        className="absolute right-4 top-4 text-xs font-semibold text-red-400/70 hover:text-red-400 opacity-0 group-hover:opacity-100 transition"
+                      >
+                        Delete Section
+                      </button>
+                      <div className="grid gap-4">
+                        <label className="space-y-2 text-xs uppercase tracking-widest text-zinc-400">
+                          <span>Section Title</span>
+                          <input
+                            value={section.title}
+                            onChange={(e) => updateSection(sIdx, { title: e.target.value })}
+                            className="input"
+                            placeholder="e.g. Space Theme"
+                          />
+                        </label>
+                        <label className="space-y-2 text-xs uppercase tracking-widest text-zinc-400">
+                          <span>Section Content</span>
+                          <textarea
+                            value={section.content}
+                            onChange={(e) => updateSection(sIdx, { content: e.target.value })}
+                            className="input min-h-32"
+                            placeholder="Description paragraphs..."
+                          />
+                        </label>
+                        <div className="space-y-2">
+                          <span className="text-xs uppercase tracking-widest text-zinc-400">Section Images</span>
+                          <div className="grid gap-3 grid-cols-2 md:grid-cols-4">
+                            {section.images.map((img, iIdx) => (
+                              <div key={iIdx} className="relative group/img aspect-video rounded-lg overflow-hidden border border-zinc-700 bg-black">
+                                <img src={img} className="w-full h-full object-cover opacity-80" />
+                                <button
+                                  onClick={() => removeSectionImage(sIdx, iIdx)}
+                                  className="absolute inset-0 bg-red-900/50 flex items-center justify-center text-white text-xs opacity-0 group-hover/img:opacity-100 transition"
+                                >
+                                  Remove
+                                </button>
+                              </div>
+                            ))}
+                            <label className="cursor-pointer aspect-video rounded-lg border border-dashed border-zinc-700 flex flex-col items-center justify-center text-xs text-zinc-500 hover:bg-zinc-800 transition">
+                              <span>+ Add Image</span>
+                              <input
+                                type="file"
+                                className="hidden"
+                                accept="image/*"
+                                onChange={async (e) => {
+                                  const file = e.target.files?.[0];
+                                  if (!file) return;
+                                  try {
+                                    await uploadSectionImage(file, sIdx);
+                                  } catch (error) {
+                                    alert("Upload failed");
+                                  }
+                                  e.target.value = ''; // Reset
+                                }}
+                              />
+                            </label>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
             </div>
 
             <div className="mt-6">
@@ -965,11 +1124,11 @@ export default function AdminPage() {
             </div>
           </div>
 
-          <aside className="space-y-4">
-            <div className="rounded-xl border border-zinc-800 bg-zinc-950/70 p-4">
-              <h3 className="text-sm font-semibold text-zinc-100">
-                Project settings
-              </h3>
+            <aside className="flex flex-col gap-6">
+              <div className="rounded-2xl border border-zinc-800 bg-zinc-900/30 p-5">
+                <h3 className="mb-4 text-base font-semibold text-zinc-100 border-b border-zinc-800 pb-2">
+                  Project Settings
+                </h3>
               <div className="mt-3 grid gap-3">
                 <Field label="Slug">
                   <input
@@ -1004,27 +1163,28 @@ export default function AdminPage() {
                 </Field>
               </div>
             </div>
-            <div className="rounded-xl border border-zinc-800 bg-zinc-950/70 p-4">
-              <h3 className="text-sm font-semibold text-zinc-100">Actions</h3>
-              <div className="mt-3 flex flex-col gap-2">
+            <div className="rounded-2xl border border-zinc-800 bg-zinc-900/30 p-5">
+              <h3 className="mb-4 text-base font-semibold text-zinc-100 border-b border-zinc-800 pb-2">Actions</h3>
+              <div className="flex flex-col gap-3">
                 <button
                   onClick={saveProject}
                   disabled={savingProject}
-                  className="rounded-md bg-cyan-500 px-4 py-2 text-sm font-semibold text-zinc-950 disabled:opacity-60"
+                  className="rounded-lg bg-cyan-500 px-4 py-3 text-sm font-bold text-cyan-950 shadow-lg shadow-cyan-500/20 transition-all hover:bg-cyan-400 disabled:opacity-60"
                 >
-                  {savingProject ? "Saving..." : "Save project"}
+                  {savingProject ? "Saving..." : "Save Project"}
                 </button>
                 {selectedProjectId !== "new" ? (
                   <button
                     onClick={deleteProject}
-                    className="rounded-md border border-red-600 px-4 py-2 text-sm text-red-400 hover:bg-red-950/40"
+                    className="rounded-lg border border-red-900/50 bg-red-500/10 px-4 py-3 text-sm font-semibold text-red-400 transition-colors hover:bg-red-500/20"
                   >
-                    Delete project
+                    Delete Project
                   </button>
                 ) : null}
               </div>
             </div>
           </aside>
+        </div>
         </div>
       </section>
     </main>
@@ -1039,8 +1199,8 @@ function Field({
   children: import("react").ReactNode;
 }) {
   return (
-    <label className="space-y-1">
-      <span className="text-xs uppercase tracking-wide text-zinc-400">
+    <label className="flex flex-col space-y-1.5">
+      <span className="text-xs font-semibold uppercase tracking-wider text-zinc-400 ml-1">
         {label}
       </span>
       {children}

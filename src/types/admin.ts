@@ -43,3 +43,10 @@ export type ProjectDTO = {
   sortOrder: number;
   images: ProjectImageDTO[];
 };
+
+export type ProjectSection = {
+  id: string;
+  title: string;
+  content: string;
+  images: string[];
+};
