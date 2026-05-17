@@ -324,7 +324,7 @@ export default function AdminPage() {
   function addSection() {
     setSections((prev) => [
       ...prev,
-      { id: Date.now().toString(), title: "", content: "", images: [] },
+      { id: Date.now().toString(), title: "", content: "", images: [], buttonText: "", buttonUrl: "" },
     ]);
   }
 
@@ -683,7 +683,56 @@ export default function AdminPage() {
         </div>
       </section>
 
-      <section className="overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-950/40 shadow-xl backdrop-blur-md">
+      <section className="mb-10 overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-950/40 shadow-xl backdrop-blur-md">
+        <div className="flex items-center justify-between border-b border-zinc-800 bg-zinc-900/40 px-6 py-4">
+          <h2 className="text-xl font-semibold text-zinc-100">Published Projects</h2>
+          <button
+            onClick={() => {
+              setSelectedProjectId("new");
+              const el = document.getElementById("project-editor");
+              if (el) el.scrollIntoView({ behavior: "smooth" });
+            }}
+            className="rounded-md bg-cyan-500/20 px-4 py-2 text-sm font-medium text-cyan-400 hover:bg-cyan-500/30"
+          >
+            + New Project
+          </button>
+        </div>
+        <div className="p-6">
+          {projects.length === 0 ? (
+            <div className="text-center text-sm text-zinc-500 py-8">
+              No projects found. Create one!
+            </div>
+          ) : (
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+              {projects.map((project) => (
+                <div key={project.id} className="flex flex-col justify-between rounded-xl border border-zinc-800 bg-zinc-900/30 p-4 transition-colors hover:border-zinc-700">
+                  <div>
+                    <h3 className="font-semibold text-zinc-100">{project.title}</h3>
+                    <p className="mt-1 text-xs text-zinc-400 line-clamp-2">{project.shortDescription || project.category}</p>
+                  </div>
+                  <div className="mt-4 flex items-center justify-between">
+                    <span className={`text-[10px] uppercase tracking-wider px-2 py-1 rounded-full ${project.isPublished ? 'bg-green-500/10 text-green-400' : 'bg-zinc-800 text-zinc-400'}`}>
+                      {project.isPublished ? 'Published' : 'Draft'}
+                    </span>
+                    <button
+                      onClick={() => {
+                        if (project.id) setSelectedProjectId(project.id);
+                        const el = document.getElementById("project-editor");
+                        if (el) el.scrollIntoView({ behavior: "smooth" });
+                      }}
+                      className="text-xs font-medium text-cyan-400 hover:text-cyan-300"
+                    >
+                      Edit Project &rarr;
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </section>
+
+      <section id="project-editor" className="overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-950/40 shadow-xl backdrop-blur-md">
         <div className="flex flex-wrap items-center justify-between gap-4 border-b border-zinc-800 bg-zinc-900/40 px-6 py-4">
           <h2 className="text-xl font-semibold text-zinc-100">Projects CRUD</h2>
           <select
@@ -1006,6 +1055,26 @@ export default function AdminPage() {
                             placeholder="Description paragraphs..."
                           />
                         </label>
+                        <div className="grid gap-4 md:grid-cols-2">
+                          <label className="space-y-2 text-xs uppercase tracking-widest text-zinc-400">
+                            <span>Button Text (Optional)</span>
+                            <input
+                              value={section.buttonText || ""}
+                              onChange={(e) => updateSection(sIdx, { buttonText: e.target.value })}
+                              className="input"
+                              placeholder="e.g. Download App"
+                            />
+                          </label>
+                          <label className="space-y-2 text-xs uppercase tracking-widest text-zinc-400">
+                            <span>Button URL (Optional)</span>
+                            <input
+                              value={section.buttonUrl || ""}
+                              onChange={(e) => updateSection(sIdx, { buttonUrl: e.target.value })}
+                              className="input"
+                              placeholder="https://..."
+                            />
+                          </label>
+                        </div>
                         <div className="space-y-2">
                           <span className="text-xs uppercase tracking-widest text-zinc-400">Section Images</span>
                           <div className="grid gap-3 grid-cols-2 md:grid-cols-4">

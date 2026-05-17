@@ -177,6 +177,16 @@ const ProjectCard = ({ project }: { project: ProjectDTO }) => {
                             );
                           })}
                         </div>
+                        {section.buttonText && section.buttonUrl && (
+                          <div className="pt-2">
+                            <Link href={section.buttonUrl} target="_blank">
+                              <button className="group flex items-center gap-2 bg-primary/10 text-primary border border-primary/20 hover:bg-primary/20 text-sm font-medium px-4 py-2 rounded-lg transition-colors">
+                                {section.buttonText}
+                                <ArrowUpRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
+                              </button>
+                            </Link>
+                          </div>
+                        )}
                         {section.images && section.images.length > 0 && (
                           <div className="mt-6">
                             <SlideShow images={section.images} />

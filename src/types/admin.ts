@@ -49,4 +49,6 @@ export type ProjectSection = {
   title: string;
   content: string;
   images: string[];
+  buttonText?: string;
+  buttonUrl?: string;
 };

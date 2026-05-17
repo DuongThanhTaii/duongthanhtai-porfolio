@@ -3,8 +3,8 @@ import { z } from "zod";
 const urlSchema = z
   .string()
   .refine(
-    (value) => value === "#" || /^https?:\/\//i.test(value) || /^\/[a-zA-Z0-9_-]/i.test(value),
-    "URL must start with http://, https://, /, or be #"
+    (value) => value === "" || value === "#" || /^https?:\/\//i.test(value) || /^\/[a-zA-Z0-9_-]/i.test(value),
+    "URL must start with http://, https://, /, be #, or be empty"
   );
 
 export const adminLoginSchema = z.object({
