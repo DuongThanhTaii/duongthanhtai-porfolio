@@ -63,3 +63,26 @@ export const projectInputSchema = z.object({
     )
     .default([]),
 });
+
+const experienceItemSchema = z.object({
+  id: z.number().int().optional(),
+  sectionId: z.number().int().optional(),
+  startDate: z.string().min(1).max(40),
+  endDate: z.string().min(1).max(40),
+  title: z.string().min(1).max(180),
+  company: z.string().min(1).max(180),
+  description: z.array(z.string().min(1).max(400)).default([]),
+  skills: z.array(z.string().min(1).max(60)).default([]),
+  sortOrder: z.number().int().min(0).default(0),
+});
+
+const experienceSectionSchema = z.object({
+  id: z.number().int().optional(),
+  title: z.string().min(1).max(120),
+  sortOrder: z.number().int().min(0).default(0),
+  items: z.array(experienceItemSchema).default([]),
+});
+
+export const experiencePayloadSchema = z.object({
+  sections: z.array(experienceSectionSchema).default([]),
+});

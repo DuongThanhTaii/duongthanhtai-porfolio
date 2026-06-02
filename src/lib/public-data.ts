@@ -1,8 +1,15 @@
 import { asc, eq } from "drizzle-orm";
 import { getDb } from "@/db";
-import { profiles, projectImages, projects, socialLinks } from "@/db/schema";
+import {
+  experienceItems,
+  experienceSections,
+  profiles,
+  projectImages,
+  projects,
+  socialLinks,
+} from "@/db/schema";
 import { config } from "@/data/config";
-import type { ProfileDTO, ProjectDTO } from "@/types/admin";
+import type { ExperienceSectionDTO, ProfileDTO, ProjectDTO } from "@/types/admin";
 
 const defaultSocialLinks = Object.entries(config.social).map(
   ([platform, url], index) => ({
@@ -104,6 +111,46 @@ export async function getPublicProjects(): Promise<ProjectDTO[]> {
           imageUrl: image.imageUrl,
           imagePublicId: image.imagePublicId ?? null,
           sortOrder: image.sortOrder,
+        })),
+    }));
+  } catch {
+    return [];
+  }
+}
+
+export async function getPublicExperience(): Promise<ExperienceSectionDTO[]> {
+  try {
+    const db = getDb();
+    const sections = await db
+      .select()
+      .from(experienceSections)
+      .orderBy(asc(experienceSections.sortOrder), asc(experienceSections.id));
+
+    if (sections.length === 0) {
+      return [];
+    }
+
+    const items = await db
+      .select()
+      .from(experienceItems)
+      .orderBy(asc(experienceItems.sortOrder), asc(experienceItems.id));
+
+    return sections.map((section) => ({
+      id: section.id,
+      title: section.title,
+      sortOrder: section.sortOrder,
+      items: items
+        .filter((item) => item.sectionId === section.id)
+        .map((item) => ({
+          id: item.id,
+          sectionId: item.sectionId,
+          startDate: item.startDate,
+          endDate: item.endDate,
+          title: item.title,
+          company: item.company,
+          description: item.description ?? [],
+          skills: item.skills ?? [],
+          sortOrder: item.sortOrder,
         })),
     }));
   } catch {

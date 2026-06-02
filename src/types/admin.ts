@@ -52,3 +52,22 @@ export type ProjectSection = {
   buttonText?: string;
   buttonUrl?: string;
 };
+
+export type ExperienceItemDTO = {
+  id?: number;
+  sectionId?: number;
+  startDate: string;
+  endDate: string;
+  title: string;
+  company: string;
+  description: string[];
+  skills: string[];
+  sortOrder: number;
+};
+
+export type ExperienceSectionDTO = {
+  id?: number;
+  title: string;
+  sortOrder: number;
+  items: ExperienceItemDTO[];
+};

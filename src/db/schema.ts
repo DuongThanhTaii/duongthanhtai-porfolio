@@ -95,6 +95,38 @@ export const projectImages = pgTable("project_images", {
     .notNull(),
 });
 
+export const experienceSections = pgTable("experience_sections", {
+  id: serial("id").primaryKey(),
+  title: varchar("title", { length: 120 }).notNull(),
+  sortOrder: integer("sort_order").default(0).notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .defaultNow()
+    .notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true })
+    .defaultNow()
+    .notNull(),
+});
+
+export const experienceItems = pgTable("experience_items", {
+  id: serial("id").primaryKey(),
+  sectionId: integer("section_id")
+    .notNull()
+    .references(() => experienceSections.id, { onDelete: "cascade" }),
+  startDate: varchar("start_date", { length: 40 }).notNull(),
+  endDate: varchar("end_date", { length: 40 }).notNull(),
+  title: varchar("title", { length: 180 }).notNull(),
+  company: varchar("company", { length: 180 }).notNull(),
+  description: text("description").array().default([]).notNull(),
+  skills: text("skills").array().default([]).notNull(),
+  sortOrder: integer("sort_order").default(0).notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .defaultNow()
+    .notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true })
+    .defaultNow()
+    .notNull(),
+});
+
 export const projectsRelations = relations(projects, ({ many }) => ({
   images: many(projectImages),
 }));
@@ -105,3 +137,20 @@ export const projectImagesRelations = relations(projectImages, ({ one }) => ({
     references: [projects.id],
   }),
 }));
+
+export const experienceSectionsRelations = relations(
+  experienceSections,
+  ({ many }) => ({
+    items: many(experienceItems),
+  }),
+);
+
+export const experienceItemsRelations = relations(
+  experienceItems,
+  ({ one }) => ({
+    section: one(experienceSections, {
+      fields: [experienceItems.sectionId],
+      references: [experienceSections.id],
+    }),
+  }),
+);

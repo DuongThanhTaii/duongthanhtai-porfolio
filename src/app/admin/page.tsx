@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import type {
+  ExperienceSectionDTO,
   ProfileDTO,
   ProjectDTO,
   ProjectImageDTO,
@@ -89,6 +90,18 @@ const mergeUnique = (base: string[], extra: string[]) => {
   return result;
 };
 
+const splitLines = (value: string) =>
+  value
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean);
+
+const splitCommaList = (value: string) =>
+  value
+    .split(",")
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+
 export default function AdminPage() {
   const [loading, setLoading] = useState(true);
   const [savingProfile, setSavingProfile] = useState(false);
@@ -100,6 +113,10 @@ export default function AdminPage() {
   const [projectForm, setProjectForm] = useState<ProjectDTO>(emptyProject);
   const [savingProject, setSavingProject] = useState(false);
   const [sections, setSections] = useState<ProjectSection[]>([]);
+  const [experienceSections, setExperienceSections] = useState<
+    ExperienceSectionDTO[]
+  >([]);
+  const [savingExperience, setSavingExperience] = useState(false);
   const [status, setStatus] = useState("");
   const [customFrontend, setCustomFrontend] = useState("");
   const [customBackend, setCustomBackend] = useState("");
@@ -119,20 +136,24 @@ export default function AdminPage() {
       setLoading(true);
       setStatus("");
       try {
-        const [profileRes, projectsRes] = await Promise.all([
+        const [profileRes, projectsRes, experienceRes] = await Promise.all([
           fetch("/api/admin/profile", { cache: "no-store" }),
           fetch("/api/admin/projects", { cache: "no-store" }),
+          fetch("/api/admin/experience", { cache: "no-store" }),
         ]);
 
-        if (!profileRes.ok || !projectsRes.ok) {
+        if (!profileRes.ok || !projectsRes.ok || !experienceRes.ok) {
           setStatus("Failed to load admin data.");
           return;
         }
 
         const profileData = (await profileRes.json()) as ProfileDTO;
         const projectsData = (await projectsRes.json()) as ProjectDTO[];
+        const experienceData =
+          (await experienceRes.json()) as ExperienceSectionDTO[];
         setProfile(profileData);
         setProjects(projectsData);
+        setExperienceSections(experienceData);
         setProjectForm(emptyProject);
         setSections([]);
       } finally {
@@ -414,6 +435,132 @@ export default function AdminPage() {
     }));
   }
 
+  function addExperienceSection() {
+    setExperienceSections((prev) => [
+      ...prev,
+      { title: "", sortOrder: prev.length, items: [] },
+    ]);
+  }
+
+  function updateExperienceSection(
+    index: number,
+    patch: Partial<ExperienceSectionDTO>,
+  ) {
+    setExperienceSections((prev) => {
+      const next = [...prev];
+      next[index] = { ...next[index], ...patch };
+      return next;
+    });
+  }
+
+  function removeExperienceSection(index: number) {
+    const confirmed = window.confirm("Delete this experience section?");
+    if (!confirmed) return;
+    setExperienceSections((prev) => prev.filter((_, i) => i !== index));
+  }
+
+  function addExperienceItem(sectionIndex: number) {
+    setExperienceSections((prev) => {
+      const next = [...prev];
+      const section = next[sectionIndex];
+      if (!section) return prev;
+      const items = [...section.items];
+      items.push({
+        startDate: "",
+        endDate: "",
+        title: "",
+        company: "",
+        description: [],
+        skills: [],
+        sortOrder: items.length,
+      });
+      next[sectionIndex] = { ...section, items };
+      return next;
+    });
+  }
+
+  function updateExperienceItem(
+    sectionIndex: number,
+    itemIndex: number,
+    patch: Partial<ExperienceSectionDTO["items"][number]>,
+  ) {
+    setExperienceSections((prev) => {
+      const next = [...prev];
+      const section = next[sectionIndex];
+      if (!section) return prev;
+      const items = [...section.items];
+      items[itemIndex] = { ...items[itemIndex], ...patch };
+      next[sectionIndex] = { ...section, items };
+      return next;
+    });
+  }
+
+  function removeExperienceItem(sectionIndex: number, itemIndex: number) {
+    setExperienceSections((prev) => {
+      const next = [...prev];
+      const section = next[sectionIndex];
+      if (!section) return prev;
+      next[sectionIndex] = {
+        ...section,
+        items: section.items.filter((_, i) => i !== itemIndex),
+      };
+      return next;
+    });
+  }
+
+  async function saveExperience() {
+    setSavingExperience(true);
+    setStatus("");
+    try {
+      const payload = {
+        sections: experienceSections.map((section) => ({
+          id: section.id,
+          title: section.title.trim(),
+          sortOrder: section.sortOrder,
+          items: section.items.map((item) => ({
+            id: item.id,
+            sectionId: item.sectionId,
+            startDate: item.startDate.trim(),
+            endDate: item.endDate.trim(),
+            title: item.title.trim(),
+            company: item.company.trim(),
+            description: item.description
+              .map((line) => line.trim())
+              .filter(Boolean),
+            skills: item.skills.map((skill) => skill.trim()).filter(Boolean),
+            sortOrder: item.sortOrder,
+          })),
+        })),
+      };
+
+      const response = await fetch("/api/admin/experience", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error ?? "Failed to save experience.");
+      }
+
+      const experienceRes = await fetch("/api/admin/experience", {
+        cache: "no-store",
+      });
+      if (experienceRes.ok) {
+        const refreshed =
+          (await experienceRes.json()) as ExperienceSectionDTO[];
+        setExperienceSections(refreshed);
+      }
+      setStatus("Experience updated.");
+    } catch (error) {
+      setStatus(
+        error instanceof Error ? error.message : "Failed to save experience.",
+      );
+    } finally {
+      setSavingExperience(false);
+    }
+  }
+
   async function saveProject() {
     setSavingProject(true);
     setStatus("");
@@ -678,6 +825,212 @@ export default function AdminPage() {
               className="rounded-lg bg-cyan-500 px-6 py-2.5 text-sm font-bold text-cyan-950 shadow-lg shadow-cyan-500/20 transition-all hover:bg-cyan-400 disabled:opacity-60"
             >
               {savingProfile ? "Saving..." : "Save profile"}
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <section className="mb-10 overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-950/40 shadow-xl backdrop-blur-md">
+        <div className="flex items-center justify-between border-b border-zinc-800 bg-zinc-900/40 px-6 py-4">
+          <h2 className="text-xl font-semibold text-zinc-100">Experience CRUD</h2>
+          <button
+            onClick={addExperienceSection}
+            className="rounded-md bg-cyan-500/20 px-4 py-2 text-sm font-medium text-cyan-400 hover:bg-cyan-500/30"
+          >
+            + Add Section
+          </button>
+        </div>
+        <div className="p-6 space-y-6">
+          {experienceSections.length === 0 ? (
+            <div className="rounded-xl border border-dashed border-zinc-800 p-8 text-center text-sm text-zinc-500">
+              No experience sections yet. Add your first section to start.
+            </div>
+          ) : (
+            <div className="space-y-6">
+              {experienceSections.map((section, sectionIndex) => (
+                <div
+                  key={section.id ?? `section-${sectionIndex}`}
+                  className="rounded-xl border border-zinc-800 bg-zinc-900/20 p-5"
+                >
+                  <div className="flex flex-wrap items-center justify-between gap-4">
+                    <div className="flex-1 min-w-[220px]">
+                      <label className="space-y-1 text-xs uppercase tracking-widest text-zinc-400">
+                        <span>Section title</span>
+                        <input
+                          value={section.title}
+                          onChange={(event) =>
+                            updateExperienceSection(sectionIndex, {
+                              title: event.target.value,
+                            })
+                          }
+                          className="input"
+                          placeholder="Work / Research / Freelance"
+                        />
+                      </label>
+                    </div>
+                    <label className="space-y-1 text-xs uppercase tracking-widest text-zinc-400">
+                      <span>Sort order</span>
+                      <input
+                        type="number"
+                        value={section.sortOrder}
+                        onChange={(event) =>
+                          updateExperienceSection(sectionIndex, {
+                            sortOrder: Number(event.target.value),
+                          })
+                        }
+                        className="input w-32"
+                      />
+                    </label>
+                    <button
+                      onClick={() => removeExperienceSection(sectionIndex)}
+                      className="rounded-md border border-zinc-700 bg-zinc-900/60 px-3 py-2 text-xs font-medium text-red-400 hover:border-red-500/60"
+                    >
+                      Remove Section
+                    </button>
+                  </div>
+
+                  <div className="mt-5 space-y-4">
+                    {section.items.length === 0 ? (
+                      <div className="rounded-lg border border-dashed border-zinc-800 p-6 text-center text-xs text-zinc-500">
+                        No experience entries yet.
+                      </div>
+                    ) : (
+                      section.items.map((item, itemIndex) => (
+                        <div
+                          key={item.id ?? `item-${itemIndex}`}
+                          className="rounded-xl border border-zinc-800 bg-zinc-900/30 p-4"
+                        >
+                          <div className="flex flex-wrap items-start justify-between gap-3">
+                            <div className="grid flex-1 gap-3 md:grid-cols-2">
+                              <label className="space-y-1 text-xs uppercase tracking-widest text-zinc-400">
+                                <span>Title</span>
+                                <input
+                                  value={item.title}
+                                  onChange={(event) =>
+                                    updateExperienceItem(sectionIndex, itemIndex, {
+                                      title: event.target.value,
+                                    })
+                                  }
+                                  className="input"
+                                  placeholder="Job title"
+                                />
+                              </label>
+                              <label className="space-y-1 text-xs uppercase tracking-widest text-zinc-400">
+                                <span>Company</span>
+                                <input
+                                  value={item.company}
+                                  onChange={(event) =>
+                                    updateExperienceItem(sectionIndex, itemIndex, {
+                                      company: event.target.value,
+                                    })
+                                  }
+                                  className="input"
+                                  placeholder="Company name"
+                                />
+                              </label>
+                            </div>
+                            <button
+                              onClick={() =>
+                                removeExperienceItem(sectionIndex, itemIndex)
+                              }
+                              className="rounded-md border border-zinc-700 bg-zinc-900/60 px-3 py-2 text-xs font-medium text-red-400 hover:border-red-500/60"
+                            >
+                              Remove
+                            </button>
+                          </div>
+
+                          <div className="mt-4 grid gap-3 md:grid-cols-3">
+                            <label className="space-y-1 text-xs uppercase tracking-widest text-zinc-400">
+                              <span>Start date</span>
+                              <input
+                                value={item.startDate}
+                                onChange={(event) =>
+                                  updateExperienceItem(sectionIndex, itemIndex, {
+                                    startDate: event.target.value,
+                                  })
+                                }
+                                className="input"
+                                placeholder="Sep 2025"
+                              />
+                            </label>
+                            <label className="space-y-1 text-xs uppercase tracking-widest text-zinc-400">
+                              <span>End date</span>
+                              <input
+                                value={item.endDate}
+                                onChange={(event) =>
+                                  updateExperienceItem(sectionIndex, itemIndex, {
+                                    endDate: event.target.value,
+                                  })
+                                }
+                                className="input"
+                                placeholder="Present"
+                              />
+                            </label>
+                            <label className="space-y-1 text-xs uppercase tracking-widest text-zinc-400">
+                              <span>Sort order</span>
+                              <input
+                                type="number"
+                                value={item.sortOrder}
+                                onChange={(event) =>
+                                  updateExperienceItem(sectionIndex, itemIndex, {
+                                    sortOrder: Number(event.target.value),
+                                  })
+                                }
+                                className="input"
+                              />
+                            </label>
+                          </div>
+
+                          <label className="mt-4 space-y-2 text-xs uppercase tracking-widest text-zinc-400">
+                            <span>Description (one line per bullet)</span>
+                            <textarea
+                              value={item.description.join("\n")}
+                              onChange={(event) =>
+                                updateExperienceItem(sectionIndex, itemIndex, {
+                                  description: splitLines(event.target.value),
+                                })
+                              }
+                              className="input min-h-28"
+                              placeholder="Key achievements..."
+                            />
+                          </label>
+
+                          <label className="mt-4 space-y-2 text-xs uppercase tracking-widest text-zinc-400">
+                            <span>Skills (comma separated)</span>
+                            <input
+                              value={item.skills.join(", ")}
+                              onChange={(event) =>
+                                updateExperienceItem(sectionIndex, itemIndex, {
+                                  skills: splitCommaList(event.target.value),
+                                })
+                              }
+                              className="input"
+                              placeholder="nextjs, react, postgres"
+                            />
+                          </label>
+                        </div>
+                      ))
+                    )}
+
+                    <button
+                      onClick={() => addExperienceItem(sectionIndex)}
+                      className="rounded border border-zinc-700 px-3 py-2 text-xs text-zinc-200 hover:border-zinc-500"
+                    >
+                      + Add Experience
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <div className="flex justify-end">
+            <button
+              onClick={saveExperience}
+              disabled={savingExperience}
+              className="rounded-lg bg-cyan-500 px-6 py-2.5 text-sm font-bold text-cyan-950 shadow-lg shadow-cyan-500/20 transition-all hover:bg-cyan-400 disabled:opacity-60"
+            >
+              {savingExperience ? "Saving..." : "Save Experience"}
             </button>
           </div>
         </div>
