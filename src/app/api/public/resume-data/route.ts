@@ -59,7 +59,7 @@ export async function GET(req: NextRequest) {
 
   if (!upstream.ok) {
     return NextResponse.json(
-      { error: "Failed to load resume." },
+      { error: "Failed to load resume.", status: upstream.status, statusText: upstream.statusText, url: resumeUrl, fallbackUrl },
       { status: 502 },
     );
   }
