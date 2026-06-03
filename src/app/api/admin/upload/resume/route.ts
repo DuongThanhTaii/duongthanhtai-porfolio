@@ -28,11 +28,13 @@ export async function POST(req: NextRequest) {
     const uploadResult = await uploadResumePdf(buffer, file.name);
 
     return NextResponse.json(uploadResult);
-  } catch (error) {
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Resume upload failed." },
-      { status: 500 }
-    );
+  } catch (error: any) {
+    console.error("Resume upload error:", error);
+    const message =
+      error instanceof Error
+        ? error.message
+        : error?.message || error?.name || JSON.stringify(error) || "Resume upload failed.";
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }
 

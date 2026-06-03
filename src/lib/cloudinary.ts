@@ -67,7 +67,7 @@ export async function uploadResumePdf(buffer: Buffer, fileName: string) {
   const baseName = fileName
     .replace(/\.pdf$/i, "")
     .replace(/[^a-zA-Z0-9-_]/g, "_");
-  const publicId = `${baseName}_${Date.now()}`;
+  const publicId = `${baseName}_${Date.now()}.pdf`;
   return uploadBuffer(buffer, {
     folder: "portfolio/resumes",
     resourceType: "raw",
